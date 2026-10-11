@@ -1,0 +1,21 @@
+{
+  "name": "smfoods-shop",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "setup": "cd functions && npm install && cd ../web && npm install",
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "preview": "npm --prefix web run preview",
+    "test": "npm --prefix functions test",
+    "emulators": "firebase emulators:start --only auth,firestore,functions",
+    "deploy:functions": "firebase deploy --only functions:shop",
+    "deploy:web": "npm run build && firebase deploy --only hosting:shop"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "firebase-functions": "^7.4.0"
+  }
+}
