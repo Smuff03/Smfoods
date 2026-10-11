@@ -1056,4 +1056,28 @@ textarea:focus {
     .topbar {
         justify-content: center
     }
+
+    .pdesc {
+        margin: 16px 0
+    }
+
+    .pdesc h3 {
+        margin: 0 0 6px;
+        font-size: 1.05rem
+    }
+
+    .pdesc p {
+        margin: 0;
+        white-space: pre-line;
+        overflow-wrap: anywhere;
+        line-height: 1.6;
+        color: var(--text, #374151)
+    }
+
+    .save {
+        color: #15803d;
+        font-weight: 600;
+        margin: 4px 0
+    }
+
 }

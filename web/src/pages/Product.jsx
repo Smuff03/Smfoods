@@ -38,15 +38,21 @@ export default function Product() {
       <div>
         <Link to={`/shop?cat=${encodeURIComponent(p.category)}`} className="chip">{p.category}</Link>
         <h1>{p.name}</h1>
-        <div className="price big">{pr.priced ? <strong>{money(pr.unit)}</strong> : <strong className="muted">Price on request</strong>}{!isRetailer && pr.priced && p.mrp > p.retailPrice && <><s className="muted">{money(p.mrp)}</s><span className="badge in">{pct}% off</span></>}</div>
+        <div className="price big">{pr.priced ? <strong>{money(pr.unit)}</strong> : <strong className="muted">Price on request</strong>}{pr.priced && p.packSize && <small className="muted">/ {p.packSize}</small>}{!isRetailer && pr.priced && p.mrp > p.retailPrice && <><s className="muted">{money(p.mrp)}</s><span className="badge in">{pct}% off</span></>}</div>
+        {!isRetailer && pr.priced && p.mrp > p.retailPrice && <p className="save">You save {money(p.mrp - p.retailPrice)} per pack ({pct}% off MRP)</p>}
         {isRetailer && pr.available && <p className="muted">Wholesale price · retail {money(p.retailPrice)}</p>}
         {isRetailer && !pr.available && <Alert>This product is not offered at wholesale prices.</Alert>}
         {!pr.priced && <Alert kind="info">The price for this product has not been set yet, so it cannot be ordered online. Please contact SMFoods.</Alert>}
         <p><StockBadge qty={p.stockQty} /></p>
-        {p.description && <p>{p.description}</p>}
+        {p.description?.trim() && (
+          <section className="pdesc">
+            <h3>About this product</h3>
+            <p>{p.description}</p>
+          </section>
+        )}
         <dl className="specs">
           {p.sku && <><dt>SKU</dt><dd>{p.sku}</dd></>}
-          {p.packSize && <><dt>Pack size</dt><dd>{p.packSize}</dd></>}
+          {p.packSize && <><dt>Quantity</dt><dd>{p.packSize}</dd></>}
           <dt>Category</dt><dd>{p.category}</dd>
           {isRetailer && pr.available && <><dt>Minimum order</dt><dd>{moq} units</dd></>}
         </dl>

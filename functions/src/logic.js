@@ -164,7 +164,7 @@ export async function placeOrder(ctx, user, input) {
   for (const l of lines) {
     const balance = l.stock - l.qty;
     tx.update('adminProducts', l.product.id, { stock: balance });
-    tx.update('products', l.product.id, { stockQty: balance });   // ← added
+    tx.update('products', l.product.id, { stockQty: balance });
     const mid = tx.newId('inventory');
     tx.set('inventory', mid, {
       id: mid, productId: l.product.id, productName: l.product.name, sku: l.product.sku,
@@ -220,7 +220,7 @@ export async function syncOrderStatus(ctx, before, after) {
       if (!p) continue;
       const balance = (Number(p.stock) || 0) + it.qty;
       tx.update('adminProducts', it.productId, { stock: balance });
-      tx.update('products', it.productId, { stockQty: balance });   // ← added
+      tx.update('products', it.productId, { stockQty: balance });
       const mid = tx.newId('inventory');
       tx.set('inventory', mid, {
         id: mid, productId: it.productId, productName: p.name, sku: p.sku,
@@ -269,8 +269,9 @@ export function storefrontDocs(p, existingPricing, now) {
     stockQty: Math.max(0, Math.round(Number(p.stock) || 0)),
     active: p.active === true,
     adminProductId: p.id, createdAt: p.createdAt || now, updatedAt: now,
-    description: optional('description', 'desc'),
-    packSize: optional('packSize', 'pack', 'size'),
+    // present on the admin doc (even empty) => mirror it, so clearing the description in admin clears it on the shop too
+    description: 'description' in p ? str(p.description) : optional('desc'),
+    packSize: 'packSize' in p ? str(p.packSize) : optional('pack', 'size'),
     ...(hasImageKeys ? { imageUrl: imgs[0] || '', images: imgs } : {}),
   };
   const pricing = num(p.wholesalePrice)
