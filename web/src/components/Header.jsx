@@ -17,7 +17,7 @@ export default function Header() {
     <header className="header">
       <div className="topbar"><span>Quality Snacks. Wholesale Prices.</span><span className="hide-sm">Cash on Delivery available</span></div>
       <div className="wrap hrow">
-        <Link to="/" className="logo" onClick={go}>SM<span>Foods</span></Link>
+        <Link to="/" className="logo" onClick={go}>Crun<span>chzy</span></Link>
         <form className="search" onSubmit={submit} role="search">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search snacks, namkeen, sweets…" aria-label="Search products" />
           <button className="btn small" type="submit">Search</button>
