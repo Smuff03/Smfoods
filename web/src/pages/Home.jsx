@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { useAuth } from '../auth.jsx';
 import { useCatalog } from '../catalog.jsx';
 import ProductCard from '../components/ProductCard.jsx';
 import { CatalogNotice, EmptyCatalogue } from '../components/CatalogNotice.jsx';
@@ -15,7 +14,6 @@ const Row = ({ title, to, items }) => items.length ? (
 
 export default function Home() {
   const { products, categories, loading } = useCatalog();
-  const { user, isRetailer } = useAuth();
   const inStock = products.filter((p) => p.stockQty > 0);
   const featured = (inStock.filter((p) => p.featured === true).length ? inStock.filter((p) => p.featured === true) : inStock).slice(0, 8);
   const offers = inStock.filter((p) => discountPct(p) > 0).sort((a, b) => discountPct(b) - discountPct(a)).slice(0, 4);
@@ -26,19 +24,18 @@ export default function Home() {
       <section className="hero">
         <div className="wrap herogrid">
           <div>
-            <span className="eyebrow">Wholesale &amp; retail snacks</span>
-            <h1>Quality Snacks.<br />Wholesale Prices.</h1>
-            <p>Fresh chakli, chivda, namkeen, farsan and sweets, delivered to your door. Shops and retailers get dedicated wholesale pricing and bulk ordering.</p>
+            <span className="eyebrow">Fresh · Crunchy · Homestyle</span>
+            <h1>Good taste <em>travels</em> to your door.</h1>
+            <p>Chakli, chivda, namkeen, farsan and sweets — freshly packed and delivered. Pick the pack that suits you: 200 g, 500 g or 1 kg.</p>
             <div className="row gap">
-              <Link to="/shop" className="btn">Shop now</Link>
-              {!isRetailer && <Link to={user ? '/retailer' : '/register/retailer'} className="btn ghost">Become a retailer</Link>}
-              {isRetailer && <Link to="/bulk" className="btn ghost">Bulk order</Link>}
+              <Link to="/shop" className="btn lg">Shop now</Link>
+              <Link to="/orders" className="btn ghost lg">Track my order</Link>
             </div>
           </div>
           <ul className="perks">
-            <li><b>Wholesale pricing</b><span>Approved retailers unlock bulk rates &amp; tiers</span></li>
-            <li><b>Live stock</b><span>Availability updates in real time</span></li>
-            <li><b>Cash on Delivery</b><span>Pay when your order arrives</span></li>
+            <li><span className="pk">📦</span><div><b>Choose your pack</b><span>200 g, 500 g or 1 kg — you decide</span></div></li>
+            <li><span className="pk">💵</span><div><b>Cash on Delivery</b><span>Pay when your order arrives</span></div></li>
+            <li><span className="pk">🚚</span><div><b>Track every step</b><span>From packing to your doorstep</span></div></li>
           </ul>
         </div>
       </section>
@@ -53,7 +50,7 @@ export default function Home() {
             </section>
           )}
           <Row title="Featured products" to="/shop" items={featured} />
-          <Row title="Offers" to="/shop?sort=discount" items={isRetailer ? [] : offers} />
+          <Row title="Offers" to="/shop?sort=discount" items={offers} />
           <Row title="New arrivals" to="/shop?sort=newest" items={fresh} />
           <div className="wrap section"><EmptyCatalogue /></div>
         </>

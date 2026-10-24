@@ -7,6 +7,3 @@ const call = (name) => async (data) => {
   catch (e) { throw new Error(errMsg(e)); }
 };
 export const placeOrder = call('sfPlaceOrder');
-export const applyWholesale = call('sfApplyWholesale');
-export const setWholesaleStatus = call('sfSetWholesaleStatus');
-export const syncCatalogue = call('sfSyncAllProducts');

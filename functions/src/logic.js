@@ -18,6 +18,11 @@ export const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export const MAX_LINES = 50;
 export const MAX_QTY = 10000;
+/**
+ * Pack sizes a customer can choose. A product's retailPrice is the price of 1 kg, so a pack costs
+ * retailPrice × factor, and stock (adminProducts.stock) is counted in kg. Mirrors web/src/pricing.js.
+ */
+export const WEIGHTS = { '200g': { factor: 0.2, label: '200 g' }, '500g': { factor: 0.5, label: '500 g' }, '1kg': { factor: 1, label: '1 kg' } };
 export const PHONE_RE = /^(\+91[\s-]?)?[6-9]\d{9}$/;
 export const PIN_RE = /^[1-9]\d{5}$/;
 export const GST_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/;
@@ -68,7 +73,7 @@ export const isApprovedRetailer = (claims, profile) =>
   claims?.role === 'wholesaler' && profile?.wholesaleStatus === 'approved';
 
 /** Price one line. `product` is the adminProducts doc; `pricing` the optional productPricing doc. */
-export function priceLine({ type, product, pricing, qty }) {
+export function priceLine({ type, product, pricing, qty, weight = '1kg' }) {
   if (type === 'Wholesale') {
     if (!num(product.wholesalePrice)) throw bad(`${product.name} is not available at wholesale prices`);
     const moq = Math.max(1, Math.round(Number(pricing?.moq) || 1));
@@ -80,7 +85,9 @@ export function priceLine({ type, product, pricing, qty }) {
     return { listPrice, unitPrice: tier ? Math.min(tier.price, listPrice) : listPrice };
   }
   if (!num(product.retailPrice) || product.retailPrice <= 0) throw bad(`${product.name} is not available (no retail price set)`);
-  return { listPrice: product.retailPrice, unitPrice: product.retailPrice };
+  const factor = WEIGHTS[weight]?.factor ?? 1;
+  const price = round2(product.retailPrice * factor);
+  return { listPrice: price, unitPrice: price };
 }
 
 function nextNumber(tx, counters, key, start) {
@@ -90,14 +97,15 @@ function nextNumber(tx, counters, key, start) {
 }
 
 /**
- * Create an order. Prices, stock, minimums and totals are all computed here from admin data;
- * nothing numeric is taken from the browser except quantities.
+ * Create an order. Prices, stock and totals are all computed here from admin data;
+ * nothing numeric is taken from the browser except quantities and the chosen pack size.
+ * Every web order is a retail order (the wholesale / retailer programme is no longer part of the web shop).
  * Writes: orders/TMF-n (customer-facing), adminOrders/TMF-n (what the admin panel shows),
- * adminProducts.stock, inventory ledger (type 'Stock out'), customers/{uid} (first retail order only).
+ * adminProducts.stock (kg), inventory ledger (type 'Stock out'), customers/{uid} (first order only).
  */
 export async function placeOrder(ctx, user, input) {
   const { tx, now } = ctx;
-  const { items, address, contact, paymentMethod, requestId, note } = input || {};
+  const { items, address, contact, paymentMethod, requestId, note, consent } = input || {};
 
   const rid = text(requestId, 'Request id', { min: 8, max: 80 });
   if (!Array.isArray(items) || !items.length) throw bad('Your cart is empty');
@@ -108,10 +116,15 @@ export async function placeOrder(ctx, user, input) {
     if (typeof id !== 'string' || !id || id.includes('/')) throw bad('Invalid product in cart');
     const qty = Number(it.qty);
     if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QTY) throw bad('Quantities must be whole numbers of at least 1');
-    wanted.set(id, (wanted.get(id) || 0) + qty);
+    const weight = it.weight == null ? '1kg' : it.weight;
+    if (!Object.prototype.hasOwnProperty.call(WEIGHTS, weight)) throw bad('Please choose a valid pack size (200 g, 500 g or 1 kg)');
+    const key = `${id}|${weight}`;
+    const cur = wanted.get(key);
+    wanted.set(key, { id, weight, qty: (cur?.qty || 0) + qty });
   }
   const addr = validateAddress(address);
   const who = validateContact(contact);
+  if (consent !== true) throw bad('Please agree to share your name, mobile number and address so we can deliver your order');
   if (paymentMethod !== 'COD') throw bad('Only Cash on Delivery is available right now');
   const orderNote = text(note, 'Note', { min: 0, max: 500 });
 
@@ -119,36 +132,36 @@ export async function placeOrder(ctx, user, input) {
   const dup = await tx.find('orders', { userId: user.uid, requestId: rid });
   if (dup) return { orderId: dup.id, total: dup.total, duplicate: true };
 
-  const profile = (await tx.get('users', user.uid)) || {};
   const settings = (await tx.get('settings', 'store')) || {};
   if (settings.codEnabled === false) throw bad('Cash on Delivery is currently unavailable');
-  const type = isApprovedRetailer(user.claims, profile) ? 'Wholesale' : 'Retail';
-  const app = profile.wholesaleApplication || {};
+  const type = 'Retail';
 
   const products = new Map();
-  const pricings = new Map();
-  for (const id of wanted.keys()) {
-    products.set(id, await tx.get('adminProducts', id));
-    if (type === 'Wholesale') pricings.set(id, await tx.get('productPricing', id));
-  }
+  for (const { id } of wanted.values()) if (!products.has(id)) products.set(id, await tx.get('adminProducts', id));
   const counters = (await tx.get('meta', 'counters')) || {};
-  const knownCustomer = type === 'Retail' ? await tx.get('customers', user.uid) : true;
+  const knownCustomer = await tx.get('customers', user.uid);
 
   // ---- compute ----
   const lines = [];
-  let subtotal = 0, discount = 0;
-  for (const [id, qty] of wanted) {
+  const kgByProduct = new Map();
+  let subtotal = 0;
+  for (const { id, weight, qty } of wanted.values()) {
     const p = products.get(id);
     if (!p || p.active !== true) throw bad('A product in your cart is no longer available');
+    const w = WEIGHTS[weight];
+    const { listPrice, unitPrice } = priceLine({ type, product: p, weight, qty });
+    const kg = round2(w.factor * qty);
+    kgByProduct.set(id, round2((kgByProduct.get(id) || 0) + kg));
+    subtotal += unitPrice * qty;
+    lines.push({ product: p, weight, weightLabel: w.label, qty, kg, listPrice, unitPrice });
+  }
+  for (const [id, kg] of kgByProduct) {      // stock is checked per product, across all pack sizes
+    const p = products.get(id);
     const stock = Number(p.stock) || 0;
-    if (stock < qty) throw bad(stock > 0 ? `Only ${stock} units of ${p.name} in stock` : `${p.name} is out of stock`);
-    const { listPrice, unitPrice } = priceLine({ type, product: p, pricing: pricings.get(id), qty });
-    subtotal += listPrice * qty;
-    discount += (listPrice - unitPrice) * qty;
-    lines.push({ product: p, qty, listPrice, unitPrice, stock });
+    if (stock < kg) throw bad(stock > 0 ? `Only ${stock} kg of ${p.name} in stock` : `${p.name} is out of stock`);
   }
   subtotal = round2(subtotal);
-  discount = round2(discount);
+  const discount = 0;
   const net = round2(subtotal - discount);
   const charge = num(settings.deliveryCharge) ? settings.deliveryCharge : 0;
   const freeAbove = num(settings.freeDeliveryAbove) ? settings.freeDeliveryAbove : null;
@@ -157,40 +170,40 @@ export async function placeOrder(ctx, user, input) {
 
   // ---- writes ----
   const orderId = `TMF-${nextNumber(tx, counters, 'orders', 1000)}`;
-  const shop = type === 'Wholesale'
-    ? { name: app.shopName || who.name, gstin: app.gstin || '', ownerName: app.ownerName || who.name }
-    : null;
 
-  for (const l of lines) {
-    const balance = l.stock - l.qty;
-    tx.update('adminProducts', l.product.id, { stock: balance });
-    tx.update('products', l.product.id, { stockQty: balance });
+  for (const [id, kg] of kgByProduct) {
+    const p = products.get(id);
+    const balance = round2((Number(p.stock) || 0) - kg);
+    tx.update('adminProducts', id, { stock: balance });
+    tx.update('products', id, { stockQty: balance });
     const mid = tx.newId('inventory');
     tx.set('inventory', mid, {
-      id: mid, productId: l.product.id, productName: l.product.name, sku: l.product.sku,
-      type: 'Stock out', quantity: l.qty, balance, note: `Web order ${orderId}`, createdAt: now,
+      id: mid, productId: id, productName: p.name, sku: p.sku,
+      type: 'Stock out', quantity: kg, balance, note: `Web order ${orderId} (kg)`, createdAt: now,
     });
   }
 
   tx.set('orders', orderId, {
     id: orderId, userId: user.uid, requestId: rid, accountType: type,
     customer: { name: who.name, phone: who.phone, email: user.email || '' },
-    shop, deliveryAddress: addr,
+    shop: null, deliveryAddress: addr,
     items: lines.map((l) => ({
-      productId: l.product.id, sku: l.product.sku, name: l.product.name, qty: l.qty,
+      productId: l.product.id, sku: l.product.sku, name: l.product.name,
+      weight: l.weight, weightLabel: l.weightLabel, qty: l.qty, kg: l.kg,
       listPrice: l.listPrice, unitPrice: l.unitPrice, lineTotal: round2(l.unitPrice * l.qty),
     })),
     subtotal, discount, deliveryCharge, total,
     paymentMethod: 'COD', paymentStatus: 'Pending', orderStatus: 'Pending',
+    consent: { dataProcessing: true, at: now },
     note: orderNote, stockRestored: false, createdAt: now, updatedAt: now,
   });
 
   // Exact shape the admin panel's Orders page reads (id, customer, type, amount, status, note, createdAt).
   tx.set('adminOrders', orderId, {
     id: orderId,
-    customer: shop ? shop.name : who.name,
+    customer: who.name,
     type, amount: total, status: 'Pending',
-    note: `Web order · COD · ${who.phone}${orderNote ? ` · ${orderNote}` : ''}`.slice(0, 500),
+    note: `Web order · COD · ${who.phone} · ${lines.map((l) => `${l.product.name} ${l.weightLabel} x${l.qty}`).join(', ')}${orderNote ? ` · ${orderNote}` : ''}`.slice(0, 500),
     createdAt: now, source: 'storefront', userId: user.uid, storefrontOrderId: orderId,
   });
 
@@ -208,23 +221,25 @@ export async function syncOrderStatus(ctx, before, after) {
   if (!after || after.source !== 'storefront' || before?.status === after.status) return;
   const order = await tx.get('orders', after.id);
   if (!order) return;
-  const products = [];
   const restock = after.status === 'Cancelled' && !order.stockRestored;
-  if (restock) for (const it of order.items) products.push([it, await tx.get('adminProducts', it.productId)]);
+  const kgBack = new Map();                       // kg to return, per product (older orders have no kg: qty was in units of 1 kg)
+  if (restock) for (const it of order.items) kgBack.set(it.productId, round2((kgBack.get(it.productId) || 0) + (Number.isFinite(it.kg) ? it.kg : it.qty)));
+  const products = [];
+  if (restock) for (const [id, kg] of kgBack) products.push([id, kg, await tx.get('adminProducts', id)]);
 
   const patch = { orderStatus: after.status, updatedAt: now };
   if (after.status === 'Delivered' && order.paymentMethod === 'COD') patch.paymentStatus = 'Paid';
   if (restock) {
     patch.stockRestored = true;
-    for (const [it, p] of products) {
+    for (const [id, kg, p] of products) {
       if (!p) continue;
-      const balance = (Number(p.stock) || 0) + it.qty;
-      tx.update('adminProducts', it.productId, { stock: balance });
-      tx.update('products', it.productId, { stockQty: balance });
+      const balance = round2((Number(p.stock) || 0) + kg);
+      tx.update('adminProducts', id, { stock: balance });
+      tx.update('products', id, { stockQty: balance });
       const mid = tx.newId('inventory');
       tx.set('inventory', mid, {
-        id: mid, productId: it.productId, productName: p.name, sku: p.sku,
-        type: 'Adjustment', quantity: it.qty, balance, note: `Cancelled ${order.id}`, createdAt: now,
+        id: mid, productId: id, productName: p.name, sku: p.sku,
+        type: 'Adjustment', quantity: kg, balance, note: `Cancelled ${order.id} (kg)`, createdAt: now,
       });
     }
   }

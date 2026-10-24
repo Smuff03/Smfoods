@@ -5,20 +5,21 @@ import App from './App.jsx';
 import { AuthProvider } from './auth.jsx';
 import { CartProvider } from './cart.jsx';
 import { CatalogProvider } from './catalog.jsx';
+import { ConsentProvider } from './consent.jsx';
 import { firebaseConfigured } from './firebase.js';
 import './styles.css';
 
 class Boundary extends React.Component {
   state = { e: null };
   static getDerivedStateFromError(e) { return { e }; }
-  componentDidCatch(e) { console.error('SMFoods render error:', e); }
+  componentDidCatch(e) { console.error('Crunchzy render error:', e); }
   render() {
     if (!this.state.e) return this.props.children;
     return (
       <div className="wrap section">
         <h2>Something went wrong</h2>
         <p className="muted">Please refresh the page. If it keeps happening, the details below will help fix it.</p>
-        <pre style={{ whiteSpace: 'pre-wrap', background: '#f6f6f6', padding: 12, borderRadius: 8 }}>{String(this.state.e?.message || this.state.e)}</pre>
+        <pre style={{ whiteSpace: 'pre-wrap', background: '#FFF4E0', padding: 12, borderRadius: 8 }}>{String(this.state.e?.message || this.state.e)}</pre>
       </div>
     );
   }
@@ -44,7 +45,7 @@ root.render(
   firebaseConfigured ? (
     <Boundary>
       <BrowserRouter>
-        <AuthProvider><CatalogProvider><CartProvider><App /></CartProvider></CatalogProvider></AuthProvider>
+        <ConsentProvider><AuthProvider><CatalogProvider><CartProvider><App /></CartProvider></CatalogProvider></AuthProvider></ConsentProvider>
       </BrowserRouter>
     </Boundary>
   ) : <Setup />,

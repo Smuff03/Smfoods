@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
 import { Alert, AddressFields, Field, Spinner, emptyAddress } from '../components/ui.jsx';
-import { PHONE_RE, RETAILER_LABEL, errMsg, validateAddress } from '../utils.js';
+import { PHONE_RE, errMsg, validateAddress } from '../utils.js';
 
 export default function Profile() {
   const a = useAuth();
@@ -40,11 +39,9 @@ export default function Profile() {
           <Field label="Name"><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
           <Field label="Mobile number"><input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} inputMode="tel" /></Field>
         </div>
-        <p className="muted">Email: {a.user.email} · Account type: {a.isAdmin ? 'Admin' : a.isRetailer ? 'Retailer' : a.wholesaleStatus ? `Customer (retailer ${RETAILER_LABEL[a.wholesaleStatus].toLowerCase()})` : 'Customer'}
-          {!a.wholesaleStatus && !a.isAdmin && <> · <Link to="/retailer">Apply as retailer</Link></>}</p>
+        <p className="muted">Email: {a.user.email}</p>
         <button className="btn" disabled={busy}>Save changes</button>
       </form>
-      {a.wholesaleStatus && <p><Link to="/retailer">View shop profile &amp; approval status →</Link></p>}
 
       <section className="card"><div className="row between"><h3>Saved addresses</h3>{!adding && <button className="btn ghost small" onClick={() => setAdding(true)}>+ Add address</button>}</div>
         {!saved.length && !adding && <p className="muted">No saved addresses yet.</p>}

@@ -7,7 +7,7 @@ export function CatalogNotice() {
   const btn = <> <button className="btn ghost small" onClick={retry}>Try again</button></>;
   if (status === 'error') {
     return errorCode === 'permission-denied'
-      ? <Alert>The product catalogue could not be opened (permission denied). Please contact SMFoods support.{btn}</Alert>
+      ? <Alert>The product catalogue could not be opened (permission denied). Please contact Crunchzy support.{btn}</Alert>
       : <Alert>We could not load the products. Check your internet connection and try again.{btn}</Alert>;
   }
   if (status === 'offline') return <Alert>You appear to be offline or the server is unreachable. Products will appear automatically when the connection returns.{btn}</Alert>;
@@ -23,7 +23,7 @@ export function EmptyCatalogue() {
   return (
     <Empty title="No products available yet">
       Our catalogue is being updated. Please check back soon.
-      {import.meta.env.DEV && <><br /><small>[dev] The storefront reads the <code>products</code> collection, not <code>adminProducts</code>. Check the “Catalogue check” panel on <code>/admin</code> and the README.</small></>}
+      {import.meta.env.DEV && <><br /><small>[dev] The storefront reads the <code>products</code> collection. See the README for how products are synced from the admin panel.</small></>}
     </Empty>
   );
 }

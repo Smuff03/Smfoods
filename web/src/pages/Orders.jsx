@@ -4,7 +4,7 @@ import { collection, limit, onSnapshot, orderBy, query, where } from 'firebase/f
 import { useAuth } from '../auth.jsx';
 import { db } from '../firebase.js';
 import { Alert, Empty, Spinner, StatusBadge } from '../components/ui.jsx';
-import { errMsg, fmtDate, money } from '../utils.js';
+import { STATUS_LABEL, errMsg, fmtDate, money } from '../utils.js';
 
 export default function Orders() {
   const { user } = useAuth();
@@ -22,8 +22,8 @@ export default function Orders() {
       <Alert>{err}</Alert>
       {!orders ? <Spinner /> : !orders.length ? <Empty title="No orders yet"><Link to="/shop">Start shopping</Link></Empty> : orders.map((o) => (
         <Link to={`/orders/${o.id}`} key={o.id} className="card orow">
-          <div><b>{o.id}</b><div className="muted">{fmtDate(o.createdAt)} · {o.items?.length || 0} item{o.items?.length === 1 ? '' : 's'}</div></div>
-          <div className="right"><StatusBadge status={o.orderStatus} /><div><b>{money(o.total)}</b></div></div>
+          <div><b>{o.id}</b><div className="muted">{fmtDate(o.createdAt)} · {o.items?.length || 0} item{o.items?.length === 1 ? '' : 's'}</div><small className="more">Track order &amp; view bill →</small></div>
+          <div className="right"><StatusBadge status={STATUS_LABEL[o.orderStatus] || o.orderStatus} /><div><b>{money(o.total)}</b></div></div>
         </Link>
       ))}
     </div>

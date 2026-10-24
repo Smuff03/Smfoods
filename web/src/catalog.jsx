@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { collection, doc, limit, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from './firebase.js';
-import { useAuth } from './auth.jsx';
 import { errMsg } from './utils.js';
 
 const Ctx = createContext(null);
@@ -10,7 +9,7 @@ const LIMIT = 500; // storefront shows up to 500 active products; lists paginate
 const SLOW_MS = 8000;
 
 // Logs the Firebase error code/message only (never config, tokens or user data).
-const log = (what, e) => console.error(`[SMFoods] ${what}:`, e?.code || 'unknown', e?.message || '');
+const log = (what, e) => console.error(`[Crunchzy] ${what}:`, e?.code || 'unknown', e?.message || '');
 
 /** Plain https image URLs, primary first. Accepts strings or the admin's { path, url } objects. */
 export function normalizeImages(p) {
@@ -27,14 +26,12 @@ export function normalizeImages(p) {
 /**
  * Live catalogue straight from Firestore collection `products` (active items only).
  * The admin panel writes to the private `adminProducts` collection; the `sfSyncProduct` Cloud Function
- * copies each product to `products` (see README). Approved retailers also listen to `productPricing`.
+ * copies each product to `products` (see README). `retailPrice` is the price of 1 kg and `stockQty` is in kg.
  *
  * status: 'loading' | 'ready' | 'empty' | 'error' | 'offline'
  */
 export function CatalogProvider({ children }) {
-  const { isRetailer } = useAuth();
   const [products, setProducts] = useState([]);
-  const [pricing, setPricing] = useState({});
   const [settings, setSettings] = useState({});
   const [loaded, setLoaded] = useState(false);
   const [offline, setOffline] = useState(false);
@@ -61,21 +58,11 @@ export function CatalogProvider({ children }) {
     return () => { clearTimeout(timer); off(); };
   }, [attempt]);
 
-  useEffect(() => {
-    if (!isRetailer) { setPricing({}); return undefined; }
-    return onSnapshot(collection(db, 'productPricing'),
-      (snap) => setPricing(Object.fromEntries(snap.docs.map((d) => [d.id, d.data()]))),
-      (e) => { log('productPricing listener failed', e); setPricing({}); });
-  }, [isRetailer]);
-
   useEffect(() => onSnapshot(doc(db, 'settings', 'store'),
     (d) => setSettings(d.exists() ? d.data() : {}),
     (e) => { log('settings listener failed', e); setSettings({}); }), []);
 
   const list = useMemo(() => products.map((p) => {
-    const w = pricing[p.id];
-    const ok = w && Number.isFinite(w.wholesalePrice);
-    const tiers = Array.isArray(w?.tiers) ? w.tiers.filter((t) => Number.isFinite(t?.minQty) && Number.isFinite(t?.price)) : [];
     const images = normalizeImages(p);
     return {
       ...p,
@@ -83,9 +70,8 @@ export function CatalogProvider({ children }) {
       retailPrice: Number(p.retailPrice) || 0, mrp: Number(p.mrp) || 0,
       stockQty: Number(p.stockQty) || 0,
       images, imageUrl: images[0] || '',
-      wholesale: ok ? { price: w.wholesalePrice, moq: Math.max(1, Number(w.moq) || 1), tiers } : null,
     };
-  }), [products, pricing]);
+  }), [products]);
 
   const status = err ? 'error' : !loaded ? (offline && slow ? 'offline' : 'loading') : list.length ? 'ready' : 'empty';
   const loading = status === 'loading';

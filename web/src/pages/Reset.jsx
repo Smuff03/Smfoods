@@ -27,7 +27,7 @@ export default function Reset() {
         <Field label="Email"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></Field>
         <button className="btn block" disabled={busy}>{busy ? 'Sending…' : 'Send reset link'}</button>
       </form>
-      <p className="center"><Link to="/login/customer">Back to login</Link></p>
+      <p className="center"><Link to="/login">Back to login</Link></p>
     </div></div>
   );
 }

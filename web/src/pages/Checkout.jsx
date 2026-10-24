@@ -5,6 +5,7 @@ import { useAuth } from '../auth.jsx';
 import { useCart, useCartLines } from '../cart.jsx';
 import { useCatalog } from '../catalog.jsx';
 import { Alert, AddressFields, Empty, Field, Spinner, emptyAddress } from '../components/ui.jsx';
+import { weightOf } from '../pricing.js';
 import { PHONE_RE, money, validateAddress } from '../utils.js';
 
 const newId = () => (crypto?.randomUUID ? crypto.randomUUID() : `r${Date.now()}${Math.random().toString(36).slice(2)}`);
@@ -13,7 +14,7 @@ export default function Checkout() {
   const a = useAuth();
   const { clear } = useCart();
   const { settings } = useCatalog();
-  const { lines, subtotal, saving, net, issues, loading } = useCartLines();
+  const { lines, subtotal, net, issues, loading } = useCartLines();
   const nav = useNavigate();
   const saved = a.profile?.addresses || [];
   const [contact, setContact] = useState({ name: '', phone: '' });
@@ -21,6 +22,7 @@ export default function Checkout() {
   const [addr, setAddr] = useState(emptyAddress);
   const [save, setSave] = useState(true);
   const [note, setNote] = useState('');
+  const [agree, setAgree] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -46,17 +48,18 @@ export default function Checkout() {
     e.preventDefault();
     if (lock.current) return;
     setErr('');
-    if (contact.name.trim().length < 2) return setErr('Enter the contact name.');
+    if (contact.name.trim().length < 2) return setErr('Enter your name.');
     if (!PHONE_RE.test(contact.phone.trim())) return setErr('Enter a valid 10-digit mobile number.');
     const m = validateAddress(addr); if (m) return setErr(m);
+    if (!agree) return setErr('Please tick the consent box so we can use your details to deliver your order.');
     if (issues.length) return setErr(issues[0]);
     lock.current = true; setBusy(true);
     try {
       const { label, id, ...clean } = addr; // eslint-disable-line no-unused-vars
       const r = await placeOrder({
-        items: lines.map((l) => ({ productId: l.id, qty: l.qty })),
+        items: lines.map((l) => ({ productId: l.id, weight: l.weight, qty: l.qty })),
         address: clean, contact: { name: contact.name.trim(), phone: contact.phone.trim() },
-        paymentMethod: 'COD', requestId: requestId.current, note: note.trim(),
+        paymentMethod: 'COD', consent: true, requestId: requestId.current, note: note.trim(),
       });
       if (save && pick === 'new') {
         try { await a.saveProfile({ addresses: [...saved, { ...clean, id: newId().slice(0, 8), label: clean.city }].slice(-10) }); } catch { /* non-critical */ }
@@ -70,38 +73,45 @@ export default function Checkout() {
     <form className="wrap section cartgrid" onSubmit={submit} noValidate>
       <div>
         <h1 className="h1s">Checkout</h1>
-        {a.isRetailer && <Alert kind="info">Ordering as retailer: {a.profile?.wholesaleApplication?.shopName}. Wholesale prices apply.</Alert>}
-        <section className="card"><h3>Contact</h3>
+        <section className="card"><h3>1 · Your details</h3>
           <div className="grid2">
             <Field label="Name *"><input value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} autoComplete="name" /></Field>
-            <Field label="Mobile number *"><input value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} inputMode="tel" autoComplete="tel" /></Field>
+            <Field label="Mobile number *" hint="Our team will call you on this number"><input value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} inputMode="tel" autoComplete="tel" placeholder="10-digit mobile" /></Field>
           </div>
         </section>
-        <section className="card"><h3>Delivery address</h3>
+        <section className="card"><h3>2 · Delivery address</h3>
           {saved.length > 0 && <div className="pills">{saved.map((s) => <button type="button" key={s.id} className={pick === s.id ? 'pill on' : 'pill'} onClick={() => choose(s.id)}>{s.label || s.city}</button>)}
             <button type="button" className={pick === 'new' ? 'pill on' : 'pill'} onClick={() => choose('new')}>+ New address</button></div>}
           <AddressFields v={addr} set={(v) => { setAddr(v); }} />
           {pick === 'new' && <label className="check"><input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} /> Save this address to my profile</label>}
         </section>
-        <section className="card"><h3>Payment</h3>
-          {codOn ? <label className="check"><input type="radio" checked readOnly /> Cash on Delivery (pay when your order arrives)</label>
-            : <Alert>Cash on Delivery is currently unavailable. Please try again later.</Alert>}
-          <small className="muted">Online payment is not enabled.</small>
-          <Field label="Order note (optional)"><textarea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+        <section className="card"><h3>3 · Payment</h3>
+          {codOn ? (
+            <label className="paycard on">
+              <input type="radio" name="pay" checked readOnly />
+              <span><b>💵 Cash on Delivery</b><small className="muted">Pay in cash when your order arrives</small></span>
+            </label>
+          ) : <Alert>Cash on Delivery is currently unavailable. Please try again later.</Alert>}
+          <Field label="Order note (optional)"><textarea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Any delivery instructions?" /></Field>
+        </section>
+        <section className="card consentbox">
+          <label className="check">
+            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+            <span>I agree that Crunchzy may store and use my <b>name, mobile number and delivery address</b> to process, deliver and contact me about this order. See the <Link to="/privacy" target="_blank">Privacy &amp; Cookie Policy</Link>. *</span>
+          </label>
         </section>
       </div>
       <aside className="card summary">
         <h3>Order summary</h3>
-        {lines.map((l) => <div key={l.id} className="sumrow"><span>{l.p?.name || 'Unavailable item'} × {l.qty}</span><span>{money(l.pr ? l.pr.list * l.qty : 0)}</span></div>)}
+        {lines.map((l) => <div key={l.key} className="sumrow"><span>{l.p?.name || 'Unavailable item'}<br /><small className="muted">{weightOf(l.weight).label}, +{l.qty} item{l.qty > 1 ? 's' : ''}</small></span><span>{money(l.lineTotal || 0)}</span></div>)}
         <hr />
         <div className="sumrow"><span>Subtotal</span><span>{money(subtotal)}</span></div>
-        {saving > 0 && <div className="sumrow ok"><span>Bulk discount</span><span>−{money(saving)}</span></div>}
         <div className="sumrow"><span>Delivery</span><span>{delivery ? money(delivery) : 'Free'}</span></div>
-        <div className="sumrow tot"><span>Total</span><span>{money(total)}</span></div>
+        <div className="sumrow tot"><span>Total (pay on delivery)</span><span>{money(total)}</span></div>
         <small className="muted">Final prices and stock are confirmed by our server when you place the order.</small>
         <Alert>{err}</Alert>
         {issues.map((i) => <Alert key={i}>{i}</Alert>)}
-        <button className="btn block" disabled={busy || !codOn || issues.length > 0}>{busy ? 'Placing order…' : `Place order · ${money(total)}`}</button>
+        <button className="btn block lg" disabled={busy || !codOn || issues.length > 0}>{busy ? 'Placing order…' : `Place order · ${money(total)}`}</button>
         <Link to="/cart" className="center more">← Back to cart</Link>
       </aside>
     </form>

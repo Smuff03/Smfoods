@@ -24,7 +24,7 @@ function fake(seed = {}) {
 const product = (o = {}) => ({ id: 'p1', sku: 'TMF-CHI-001', name: 'Chivda', category: 'Chivda', mrp: 120, retailPrice: 100, wholesalePrice: 80, stock: 50, active: true, ...o });
 const addr = { line1: '12 MG Road', city: 'Pune', state: 'Maharashtra', pincode: '411001' };
 const contact = { name: 'Asha', phone: '9876543210' };
-const order = (o = {}) => ({ items: [{ productId: 'p1', qty: 2 }], address: addr, contact, paymentMethod: 'COD', requestId: 'req-12345678', ...o });
+const order = (o = {}) => ({ items: [{ productId: 'p1', qty: 2 }], address: addr, contact, paymentMethod: 'COD', consent: true, requestId: 'req-12345678', ...o });
 const customer = { uid: 'u1', email: 'a@x.com', claims: {} };
 const retailer = { uid: 'r1', email: 'r@x.com', claims: { role: 'wholesaler' } };
 const approved = { wholesaleStatus: 'approved', wholesaleApplication: { shopName: 'Asha Stores', ownerName: 'Asha', phone: '9876543210', gstin: '' } };
@@ -62,7 +62,7 @@ test('duplicate submission with same requestId returns the same order, no double
 
 test('rejects overselling, inactive products, bad input, non-COD', async () => {
   const mk = (p) => fake({ 'adminProducts/p1': product(p) });
-  await assert.rejects(placeOrder(mk({ stock: 1 }), customer, order()), /Only 1 units of Chivda/);
+  await assert.rejects(placeOrder(mk({ stock: 1 }), customer, order()), /Only 1 kg of Chivda/);
   await assert.rejects(placeOrder(mk({ stock: 0 }), customer, order()), /out of stock/);
   await assert.rejects(placeOrder(mk({ active: false }), customer, order()), /no longer available/);
   await assert.rejects(placeOrder(mk(), customer, order({ items: [{ productId: 'p1', qty: 0 }] })), /whole numbers/);
@@ -81,29 +81,44 @@ test('browser-supplied price or type is ignored', async () => {
   assert.equal(f.store.get('orders/TMF-1001').accountType, 'Retail');
 });
 
-test('claim alone is not enough: wholesaler claim without approved profile is retail', async () => {
-  const f = fake({ 'adminProducts/p1': product(), 'users/r1': { wholesaleStatus: 'suspended' } });
+test('web orders are always retail, even for an account that still has a wholesaler claim', async () => {
+  const f = fake({ 'adminProducts/p1': product(), 'users/r1': approved, 'productPricing/p1': { wholesalePrice: 80, moq: 1 } });
   await placeOrder(f, retailer, order());
   assert.equal(f.store.get('adminOrders/TMF-1001').type, 'Retail');
-  assert.equal(f.store.get('orders/TMF-1001').total, 200);
+  const o = f.store.get('orders/TMF-1001');
+  assert.deepEqual([o.accountType, o.total, o.shop], ['Retail', 200, null]);
 });
 
-test('approved retailer: wholesale price, shop name, MOQ and tiers', async () => {
-  const seed = () => fake({
-    'adminProducts/p1': product(), 'users/r1': approved,
-    'productPricing/p1': { wholesalePrice: 80, moq: 10, tiers: [{ minQty: 20, price: 70 }, { minQty: 40, price: 65 }] },
-  });
-  await assert.rejects(placeOrder(seed(), retailer, order()), /Minimum order for Chivda is 10/);
-  const f = seed();
-  const r = await placeOrder(f, retailer, order({ items: [{ productId: 'p1', qty: 25 }] }));
+test('pack sizes: 200 g / 500 g / 1 kg are priced from the per-kg price and deducted from stock in kg', async () => {
+  const f = fake({ 'adminProducts/p1': product({ retailPrice: 100, stock: 10 }) });
+  const r = await placeOrder(f, customer, order({ items: [
+    { productId: 'p1', weight: '200g', qty: 2 }, { productId: 'p1', weight: '500g', qty: 1 }, { productId: 'p1', weight: '1kg', qty: 1 },
+  ] }));
   const o = f.store.get(`orders/${r.orderId}`);
-  assert.deepEqual([o.accountType, o.items[0].unitPrice, o.subtotal, o.discount, o.total], ['Wholesale', 70, 2000, 250, 1750]);
-  assert.equal(o.shop.name, 'Asha Stores');
-  const a = f.store.get(`adminOrders/${r.orderId}`);
-  assert.deepEqual([a.customer, a.type, a.amount], ['Asha Stores', 'Wholesale', 1750]);
-  assert.equal(f.store.has('customers/r1'), false);
-  const g = fake({ 'adminProducts/p1': product({ wholesalePrice: null }), 'users/r1': approved });
-  await assert.rejects(placeOrder(g, retailer, order()), /not available at wholesale/);
+  assert.deepEqual(o.items.map((i) => [i.weight, i.weightLabel, i.qty, i.unitPrice, i.lineTotal, i.kg]),
+    [['200g', '200 g', 2, 20, 40, 0.4], ['500g', '500 g', 1, 50, 50, 0.5], ['1kg', '1 kg', 1, 100, 100, 1]]);
+  assert.equal(o.total, 190);
+  assert.equal(f.store.get('adminProducts/p1').stock, 8.1);       // 0.4 + 0.5 + 1 = 1.9 kg
+  const inv = f.store.get('inventory/gen1');
+  assert.deepEqual([inv.type, inv.quantity, inv.balance], ['Stock out', 1.9, 8.1]);
+  assert.match(f.store.get(`adminOrders/${r.orderId}`).note, /Chivda 200 g x2/);
+});
+
+test('pack sizes: stock is checked in kg across all sizes; unknown sizes are rejected', async () => {
+  const mk = (stock) => fake({ 'adminProducts/p1': product({ stock }) });
+  await assert.rejects(placeOrder(mk(1), customer, order({ items: [{ productId: 'p1', weight: '1kg', qty: 1 }, { productId: 'p1', weight: '200g', qty: 1 }] })), /Only 1 kg of Chivda/);
+  await placeOrder(mk(1), customer, order({ items: [{ productId: 'p1', weight: '500g', qty: 2 }] }));          // exactly 1 kg: fine
+  await assert.rejects(placeOrder(mk(50), customer, order({ items: [{ productId: 'p1', weight: '250g', qty: 1 }] })), /pack size/);
+  await assert.rejects(placeOrder(mk(50), customer, order({ items: [{ productId: 'p1', weight: '2kg', qty: 1 }] })), /pack size/);
+});
+
+test('consent to share name, mobile and address is required and recorded on the order', async () => {
+  const f = fake({ 'adminProducts/p1': product() });
+  await assert.rejects(placeOrder(f, customer, order({ consent: false })), /agree to share/);
+  await assert.rejects(placeOrder(fake({ 'adminProducts/p1': product() }), customer, order({ consent: undefined })), /agree to share/);
+  const g = fake({ 'adminProducts/p1': product() });
+  await placeOrder(g, customer, order());
+  assert.deepEqual(g.store.get('orders/TMF-1001').consent, { dataProcessing: true, at: '2026-10-11T10:00:00.000Z' });
 });
 
 test('same product on two lines is merged for stock check', async () => {
@@ -144,6 +159,16 @@ test('cancelling restocks once with an Adjustment ledger entry', async () => {
   assert.equal(s2.store.get('adminProducts/p1').stock, 50);
 });
 
+test('cancelling an order with pack sizes returns the exact kg once', async () => {
+  const f = fake({ 'adminProducts/p1': product({ stock: 10 }) });
+  await placeOrder(f, customer, order({ items: [{ productId: 'p1', weight: '200g', qty: 3 }, { productId: 'p1', weight: '500g', qty: 1 }] }));
+  assert.equal(f.store.get('adminProducts/p1').stock, 8.9);
+  const s = fake(Object.fromEntries(f.store));
+  await syncOrderStatus(s, { status: 'Pending' }, { ...s.store.get('adminOrders/TMF-1001'), status: 'Cancelled' });
+  assert.equal(s.store.get('adminProducts/p1').stock, 10);
+  assert.equal(s.store.get('inventory/gen1').quantity, 1.1);
+});
+
 test('storefrontDocs: no wholesale data in public product; moq preserved', () => {
   const { product: p, pricing } = storefrontDocs(product(), { moq: 12 }, 'T');
   assert.equal('wholesalePrice' in p, false);
@@ -172,6 +197,12 @@ test('retailer review writes users + admin wholesalers (keeps credit fields) + a
   assert.deepEqual([w2.status, w2.creditLimit, w2.createdAt], ['On hold', 5000, 'old']);
   await assert.rejects(reviewRetailer(fake({}), 'a', 'zz', 'approved'), Fail);
   await assert.rejects(reviewRetailer(f, 'a', 'r1', 'admin'), /Invalid status/);
+});
+
+test('priceLine (retail) scales the per-kg price by pack size', () => {
+  assert.equal(priceLine({ type: 'Retail', product: product({ retailPrice: 90 }), weight: '200g', qty: 1 }).unitPrice, 18);
+  assert.equal(priceLine({ type: 'Retail', product: product({ retailPrice: 90 }), weight: '500g', qty: 1 }).unitPrice, 45);
+  assert.equal(priceLine({ type: 'Retail', product: product({ retailPrice: 90 }), qty: 1 }).unitPrice, 90);
 });
 
 test('priceLine picks highest matching tier and never exceeds list price', () => {

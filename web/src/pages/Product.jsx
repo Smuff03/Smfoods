@@ -1,33 +1,36 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '../auth.jsx';
 import { useCart } from '../cart.jsx';
 import { useCatalog } from '../catalog.jsx';
-import { StockBadge, Thumb } from '../components/ProductCard.jsx';
-import { Alert, Empty, Spinner } from '../components/ui.jsx';
-import { discountPct, priceFor } from '../pricing.js';
+import { StockBadge, Thumb, WeightSelect } from '../components/ProductCard.jsx';
+import { Alert, Empty, Spinner, Stepper } from '../components/ui.jsx';
+import { DEFAULT_WEIGHT, WEIGHTS, discountPct, inCartText, kgInCart, priceFor } from '../pricing.js';
 import { money } from '../utils.js';
 
 export default function Product() {
   const { id } = useParams();
   const { byId, loading } = useCatalog();
-  const { isRetailer } = useAuth();
-  const { add } = useCart();
+  const { items, add } = useCart();
   const nav = useNavigate();
   const p = byId[id];
+  const [wk, setWk] = useState(DEFAULT_WEIGHT);
   const [qty, setQty] = useState(1);
   const [img, setImg] = useState(0);
-  const pr = p ? priceFor(p, isRetailer, qty) : null;
-  const moq = pr?.moq || 1;
-  useEffect(() => { if (p) setQty(Math.min(moq, Math.max(1, p.stockQty))); }, [p?.id, moq]); // eslint-disable-line
+  const [done, setDone] = useState(false);
+  useEffect(() => { setWk(DEFAULT_WEIGHT); setQty(1); setImg(0); }, [id]);
+  useEffect(() => { if (!done) return undefined; const t = setTimeout(() => setDone(false), 1600); return () => clearTimeout(t); }, [done]);
 
   if (loading) return <Spinner />;
   if (!p) return <div className="wrap section"><Empty title="Product not available">This product may have been removed. <Link to="/shop">Back to shop</Link></Empty></div>;
 
-  const images = p.images; // normalised, de-duplicated URL list (see catalog.jsx)
-  const bad = qty < moq ? `Minimum order is ${moq}` : qty > p.stockQty ? `Only ${p.stockQty} in stock` : '';
-  const can = p.stockQty > 0 && pr.available && !bad;
-  const pct = !isRetailer ? discountPct(p) : 0;
+  const pr = priceFor(p, wk);
+  const images = p.images;
+  const pct = discountPct(p);
+  const inCart = inCartText(items, p.id);
+  const room = p.stockQty - kgInCart(items, p.id);           // kg still available to add
+  const maxQty = Math.max(0, Math.floor(room / pr.kg + 1e-9));
+  const bad = p.stockQty <= 0 ? '' : qty > maxQty ? (maxQty > 0 ? `You can add up to ${maxQty} more of ${pr.label}` : `No more ${pr.label} packs available (${p.stockQty} kg in stock)`) : '';
+  const can = p.stockQty > 0 && pr.available && qty >= 1 && !bad;
 
   return (
     <div className="wrap section pdp">
@@ -38,11 +41,13 @@ export default function Product() {
       <div>
         <Link to={`/shop?cat=${encodeURIComponent(p.category)}`} className="chip">{p.category}</Link>
         <h1>{p.name}</h1>
-        <div className="price big">{pr.priced ? <strong>{money(pr.unit)}</strong> : <strong className="muted">Price on request</strong>}{pr.priced && p.packSize && <small className="muted">/ {p.packSize}</small>}{!isRetailer && pr.priced && p.mrp > p.retailPrice && <><s className="muted">{money(p.mrp)}</s><span className="badge in">{pct}% off</span></>}</div>
-        {!isRetailer && pr.priced && p.mrp > p.retailPrice && <p className="save">You save {money(p.mrp - p.retailPrice)} per pack ({pct}% off MRP)</p>}
-        {isRetailer && pr.available && <p className="muted">Wholesale price · retail {money(p.retailPrice)}</p>}
-        {isRetailer && !pr.available && <Alert>This product is not offered at wholesale prices.</Alert>}
-        {!pr.priced && <Alert kind="info">The price for this product has not been set yet, so it cannot be ordered online. Please contact SMFoods.</Alert>}
+        <div className="price big">
+          {pr.priced ? <strong>{money(pr.unit)}</strong> : <strong className="muted">Price on request</strong>}
+          {pr.priced && <small className="muted">for {pr.label}</small>}
+          {pr.priced && pr.mrpUnit > 0 && <><s className="muted">{money(pr.mrpUnit)}</s><span className="badge in">{pct}% off</span></>}
+        </div>
+        {pr.priced && <p className="muted">{money(pr.perKg)} per kg{pct > 0 && <> · you save {money(p.mrp - p.retailPrice)} per kg</>}</p>}
+        {!pr.priced && <Alert kind="info">The price for this product has not been set yet, so it cannot be ordered online. Please contact Crunchzy.</Alert>}
         <p><StockBadge qty={p.stockQty} /></p>
         {p.description?.trim() && (
           <section className="pdesc">
@@ -52,27 +57,27 @@ export default function Product() {
         )}
         <dl className="specs">
           {p.sku && <><dt>SKU</dt><dd>{p.sku}</dd></>}
-          {p.packSize && <><dt>Quantity</dt><dd>{p.packSize}</dd></>}
+          <dt>Pack sizes</dt><dd>{WEIGHTS.map((w) => w.label).join(' · ')}</dd>
           <dt>Category</dt><dd>{p.category}</dd>
-          {isRetailer && pr.available && <><dt>Minimum order</dt><dd>{moq} units</dd></>}
         </dl>
-        {isRetailer && p.wholesale?.tiers.length > 0 && (
-          <table className="tbl"><thead><tr><th>Quantity</th><th>Price / unit</th></tr></thead><tbody>
-            <tr><td>{moq}+</td><td>{money(p.wholesale.price)}</td></tr>
-            {[...p.wholesale.tiers].sort((a, b) => a.minQty - b.minQty).map((t) => <tr key={t.minQty}><td>{t.minQty}+</td><td>{money(t.price)}</td></tr>)}
-          </tbody></table>
-        )}
-        <div className="row gap qtyrow">
-          <div className="qty">
-            <button onClick={() => setQty(Math.max(1, qty - 1))} aria-label="Decrease">−</button>
-            <input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Math.floor(Number(e.target.value)) || 1))} aria-label="Quantity" />
-            <button onClick={() => setQty(qty + 1)} aria-label="Increase">+</button>
+
+        <div className="buybox">
+          <div className="bfield">
+            <label htmlFor="pw">Quantity (pack size)</label>
+            <WeightSelect id="pw" value={wk} onChange={(v) => { setWk(v); setQty(1); }} stockKg={p.stockQty} />
           </div>
-          <button className="btn" disabled={!can} onClick={() => add(p.id, qty)}>Add to cart</button>
-          <button className="btn ghost" disabled={!can} onClick={() => { add(p.id, qty); nav('/cart'); }}>Buy now</button>
+          <div className="bfield">
+            <label>Number of packs</label>
+            <Stepper value={qty} onChange={setQty} min={1} max={Math.max(1, maxQty)} label="Number of packs" />
+          </div>
         </div>
-        {bad && p.stockQty > 0 && <small className="err">{bad}</small>}
-        {can && <p className="muted">Line total: <b>{money(pr.unit * qty)}</b></p>}
+        {bad && <small className="err">{bad}</small>}
+        {can && <p className="muted">{qty} × {pr.label} = <b>{money(pr.unit * qty)}</b></p>}
+        <div className="row gap qtyrow">
+          <button className="btn" disabled={!can} onClick={() => { add(p.id, wk, qty); setDone(true); }}>{done ? 'Added ✓' : 'Add to cart'}</button>
+          <button className="btn ghost" disabled={!can} onClick={() => { add(p.id, wk, qty); nav('/cart'); }}>Buy now</button>
+        </div>
+        {inCart && <p className="incart">In cart: {inCart} · <Link to="/cart">View cart</Link></p>}
       </div>
     </div>
   );

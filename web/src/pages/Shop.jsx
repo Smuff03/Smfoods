@@ -1,17 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useAuth } from '../auth.jsx';
 import { useCatalog } from '../catalog.jsx';
 import ProductCard from '../components/ProductCard.jsx';
 import { CatalogNotice, EmptyCatalogue } from '../components/CatalogNotice.jsx';
 import { Empty, Spinner } from '../components/ui.jsx';
-import { discountPct, priceFor } from '../pricing.js';
+import { discountPct } from '../pricing.js';
 
 const PAGE = 24;
 
 export default function Shop() {
   const { products, categories, loading, status } = useCatalog();
-  const { isRetailer } = useAuth();
   const [sp, setSp] = useSearchParams();
   const [shown, setShown] = useState(PAGE);
   const q = sp.get('q') || '', cat = sp.get('cat') || '', sort = sp.get('sort') || 'name', only = sp.get('stock') === '1';
@@ -21,7 +19,7 @@ export default function Shop() {
     const t = q.trim().toLowerCase();
     let l = products.filter((p) => (!cat || p.category === cat) && (!only || p.stockQty > 0)
       && (!t || `${p.name} ${p.category} ${p.sku || ''}`.toLowerCase().includes(t)));
-    const unit = (p) => priceFor(p, isRetailer, 1).unit;
+    const unit = (p) => p.retailPrice;
     const sorts = {
       name: (a, b) => a.name.localeCompare(b.name),
       'price-asc': (a, b) => unit(a) - unit(b),
@@ -30,7 +28,7 @@ export default function Shop() {
       newest: (a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')),
     };
     return [...l].sort(sorts[sort] || sorts.name);
-  }, [products, q, cat, sort, only, isRetailer]);
+  }, [products, q, cat, sort, only]);
 
   return (
     <div className="wrap section">
@@ -38,8 +36,8 @@ export default function Shop() {
         <h1 className="h1s">{cat || 'All products'}{q && <small className="muted"> · “{q}”</small>}</h1>
         <div className="row gap wrapfx">
           <select value={sort} onChange={(e) => set('sort', e.target.value)} aria-label="Sort">
-            <option value="name">Name A–Z</option><option value="price-asc">Price: low to high</option>
-            <option value="price-desc">Price: high to low</option><option value="discount">Biggest discount</option><option value="newest">Newest</option>
+            <option value="name">Name A–Z</option><option value="price-asc">Price (per kg): low to high</option>
+            <option value="price-desc">Price (per kg): high to low</option><option value="discount">Biggest discount</option><option value="newest">Newest</option>
           </select>
           <label className="check"><input type="checkbox" checked={only} onChange={(e) => set('stock', e.target.checked ? '1' : '')} /> In stock only</label>
         </div>

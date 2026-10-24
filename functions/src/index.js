@@ -1,11 +1,10 @@
 import { initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions';
-import { Fail, placeOrder, reviewRetailer, storefrontDocs, syncOrderStatus, validateApplication } from './logic.js';
+import { Fail, placeOrder, storefrontDocs, syncOrderStatus } from './logic.js';
 
 // Callable functions: same region as the admin panel's adminMutate function.
 setGlobalOptions({ region: 'us-central1', maxInstances: 10 });
@@ -15,7 +14,6 @@ const DB_REGION = 'asia-south1';
 initializeApp();
 const db = getFirestore();
 db.settings({ ignoreUndefinedProperties: true });
-const auth = getAuth();
 
 const origins = (process.env.SHOP_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 const callable = { cors: origins.length ? origins : true };
@@ -65,47 +63,6 @@ export const sfPlaceOrder = onCall(callable, async (request) => {
   try {
     return await run((ctx) => placeOrder(ctx, user, request.data));
   } catch (e) { throw asHttps(e, 'sfPlaceOrder'); }
-});
-
-/** A signed-in user submits shop details. Status becomes "pending"; only an admin can approve. */
-export const sfApplyWholesale = onCall(callable, async (request) => {
-  needAuth(request);
-  if (request.auth.token.role === 'admin') throw new HttpsError('permission-denied', 'Admin accounts cannot apply.');
-  try {
-    const app = validateApplication(request.data);
-    const uid = request.auth.uid;
-    const now = new Date().toISOString();
-    const ref = db.collection('users').doc(uid);
-    await db.runTransaction(async (t) => {
-      const s = await t.get(ref);
-      const cur = s.exists ? s.data() : {};
-      if (cur.wholesaleStatus === 'approved') throw new Fail('Your retailer account is already approved', 'failed-precondition');
-      if (cur.wholesaleStatus === 'suspended') throw new Fail('Your retailer account is suspended. Please contact SMFoods.', 'failed-precondition');
-      t.set(ref, {
-        ...(s.exists ? {} : { name: app.ownerName, email: request.auth.token.email || '', phone: app.phone, createdAt: now }),
-        wholesaleApplication: { ...app, submittedAt: now },
-        wholesaleStatus: 'pending', updatedAt: now,
-      }, { merge: true });
-    });
-    return { status: 'pending' };
-  } catch (e) { throw asHttps(e, 'sfApplyWholesale'); }
-});
-
-/** Admin: approve / reject / suspend a retailer. Sets or removes the `wholesaler` role claim. */
-export const sfSetWholesaleStatus = onCall(callable, async (request) => {
-  needAdmin(request);
-  const { uid, status } = request.data || {};
-  if (typeof uid !== 'string' || !uid || uid.includes('/')) throw new HttpsError('invalid-argument', 'A valid user id is required.');
-  try {
-    await run((ctx) => reviewRetailer(ctx, request.auth.token.email || request.auth.uid, uid, status));
-    const user = await auth.getUser(uid);
-    const claims = { ...(user.customClaims || {}) };
-    if (claims.role === 'admin') throw new Fail('This account is an admin', 'failed-precondition');
-    if (status === 'approved') claims.role = 'wholesaler';
-    else if (claims.role === 'wholesaler') delete claims.role;
-    await auth.setCustomUserClaims(uid, claims);
-    return { uid, status };
-  } catch (e) { throw asHttps(e, 'sfSetWholesaleStatus'); }
 });
 
 /** Admin: (re)build the storefront catalogue from adminProducts. Run once after deploying. */
