@@ -39,7 +39,7 @@ export default function Cart() {
             <Thumb p={l.p} />
             <div className="grow">
               <Link to={`/product/${l.id}`} className="pname">{l.p.name}</Link>
-              <div><span className="wtag">{weightOf(l.weight).label}</span> <span className="muted">+{l.qty} item{l.qty > 1 ? 's' : ''} · {money(l.pr.unit)} each</span></div>
+              <div><span className="wtag">{weightOf(l.weight, l.p).label}</span> <span className="muted">+{l.qty} item{l.qty > 1 ? 's' : ''} · {money(l.pr.unit)} each</span></div>
               {l.problem && <small className="err">{l.problem}</small>}
             </div>
             <Stepper value={l.qty} onChange={(n) => setQty(l.id, l.weight, n)} label="Number of packs" />

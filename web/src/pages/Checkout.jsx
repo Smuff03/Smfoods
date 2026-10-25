@@ -119,7 +119,7 @@ export default function Checkout() {
       </div>
       <aside className="card summary">
         <h3>Order summary</h3>
-        {lines.map((l) => <div key={l.key} className="sumrow"><span>{l.p?.name || 'Unavailable item'}<br /><small className="muted">{weightOf(l.weight).label}, +{l.qty} item{l.qty > 1 ? 's' : ''}</small></span><span>{money(l.lineTotal || 0)}</span></div>)}
+        {lines.map((l) => <div key={l.key} className="sumrow"><span>{l.p?.name || 'Unavailable item'}<br /><small className="muted">{weightOf(l.weight, l.p).label}, +{l.qty} item{l.qty > 1 ? 's' : ''}</small></span><span>{money(l.lineTotal || 0)}</span></div>)}
         <hr />
         <div className="sumrow"><span>Subtotal</span><span>{money(subtotal)}</span></div>
         {deliveryDate && <div className="sumrow"><span>Delivery date</span><span style={{ fontWeight: 600 }}>{deliveryDate}</span></div>}

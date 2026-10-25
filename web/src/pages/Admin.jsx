@@ -20,7 +20,8 @@ function CatalogueCheck() {
     const w = shop?.[p.id];
     if (!w) return ['err', 'Not synced yet — the sync function has not copied it (not deployed, or run “Sync all products now”)'];
     if (w.active !== true) return ['err', 'Hidden — inactive in the admin panel'];
-    if (!(w.retailPrice > 0)) return ['warn', 'Visible — “Price on request” (no retail price set in admin)'];
+    const hasPrice = (w.retailPrice > 0) || (Array.isArray(w.variantPricing) && w.variantPricing.some((v) => v.retailPrice > 0));
+    if (!hasPrice) return ['warn', 'Visible — “Price on request” (no retail price set in admin)'];
     return ['ok', 'Visible on the storefront'];
   };
   return (
@@ -28,10 +29,24 @@ function CatalogueCheck() {
       <h3>Catalogue check</h3>
       <Alert>{e}</Alert>
       {!admin || !shop ? <Spinner /> : !admin.length ? <p className="muted">No products in the admin panel yet.</p> : (
-        <div className="scroll"><table className="tbl"><thead><tr><th>Product</th><th>SKU</th><th>Retail price</th><th>Status</th></tr></thead><tbody>
+        <div className="scroll"><table className="tbl"><thead><tr><th>Product</th><th>SKU</th><th>Packs &amp; Pricing</th><th>Status</th></tr></thead><tbody>
           {admin.map((p) => { const [k, t] = verdict(p); return (
             <tr key={p.id}><td><b>{p.name}</b><br /><small className="muted">{p.category}</small></td><td>{p.sku}</td>
-              <td>{Number.isFinite(p.retailPrice) ? p.retailPrice : <span className="err">not set</span>}</td>
+              <td>
+                {Array.isArray(p.variantPricing) && p.variantPricing.length > 0 ? (
+                  <div>
+                    {p.variantPricing.map((v) => (
+                      <div key={v.weight} style={{ fontSize: '.84rem', whiteSpace: 'nowrap' }}>
+                        <b>{v.weight}:</b> ₹{v.retailPrice || '—'} {v.mrp ? <span className="muted">(MRP ₹{v.mrp})</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : Number.isFinite(p.retailPrice) && p.retailPrice > 0 ? (
+                  `₹${p.retailPrice}`
+                ) : (
+                  <span className="err">not set</span>
+                )}
+              </td>
               <td><span className={k === 'ok' ? '' : k === 'warn' ? 'muted' : 'err'}>{t}</span></td></tr>
           ); })}
         </tbody></table></div>

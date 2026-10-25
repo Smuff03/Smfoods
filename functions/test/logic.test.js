@@ -243,3 +243,63 @@ test('priceLine: retail order for a product without a retail price is rejected',
   assert.throws(() => priceLine({ type: 'Retail', product: product({ retailPrice: null }), qty: 1 }), Fail);
   assert.throws(() => priceLine({ type: 'Retail', product: product({ retailPrice: 0 }), qty: 1 }), Fail);
 });
+
+test('admin variantPricing: storefrontDocs copies variants and pack sizes without wholesale fields', () => {
+  const adminDoc = product({
+    startingQuantity: '200 gm',
+    availableQuantities: ['200 gm', '500 gm', '1 kg'],
+    packSize: '200 gm, 500 gm, 1 kg',
+    variantPricing: [
+      { weight: '200 gm', mrp: 60, retailPrice: 50, wholesalePrice: 40 },
+      { weight: '500 gm', mrp: 140, retailPrice: 120, wholesalePrice: 95 },
+      { weight: '1 kg', mrp: 260, retailPrice: 220, wholesalePrice: 180 },
+    ],
+  });
+  const { product: p } = storefrontDocs(adminDoc, null, '2026-10-25T10:00:00.000Z');
+  assert.equal(p.startingQuantity, '200 gm');
+  assert.deepEqual(p.availableQuantities, ['200 gm', '500 gm', '1 kg']);
+  assert.deepEqual(p.variantPricing, [
+    { weight: '200 gm', mrp: 60, retailPrice: 50 },
+    { weight: '500 gm', mrp: 140, retailPrice: 120 },
+    { weight: '1 kg', mrp: 260, retailPrice: 220 },
+  ]);
+  // Wholesale price must NOT be in public product doc
+  assert.equal('wholesalePrice' in p.variantPricing[0], false);
+});
+
+test('priceLine and placeOrder: charges exact price according to quantity/pack size set by admin', async () => {
+  const pWithVariants = product({
+    startingQuantity: '200 gm',
+    availableQuantities: ['200 gm', '500 gm', '1 kg'],
+    packSize: '200 gm, 500 gm, 1 kg',
+    variantPricing: [
+      { weight: '200 gm', mrp: 60, retailPrice: 50 },
+      { weight: '500 gm', mrp: 140, retailPrice: 120 },
+      { weight: '1 kg', mrp: 260, retailPrice: 220 },
+    ],
+    stock: 20,
+  });
+
+  // Test priceLine for 200 gm, 500 gm, and 1 kg
+  assert.deepEqual(priceLine({ type: 'Retail', product: pWithVariants, weight: '200 gm', qty: 1 }), { listPrice: 60, unitPrice: 50 });
+  assert.deepEqual(priceLine({ type: 'Retail', product: pWithVariants, weight: '500 gm', qty: 1 }), { listPrice: 140, unitPrice: 120 });
+  assert.deepEqual(priceLine({ type: 'Retail', product: pWithVariants, weight: '1 kg', qty: 1 }), { listPrice: 260, unitPrice: 220 });
+
+  // Test placing order with 500 gm (1 pack @ 120) and 200 gm (2 packs @ 50 each = 100) -> total 220
+  const f = fake({ 'adminProducts/p1': pWithVariants });
+  const r = await placeOrder(f, customer, order({
+    items: [
+      { productId: 'p1', weight: '500 gm', qty: 1 },
+      { productId: 'p1', weight: '200 gm', qty: 2 },
+    ],
+  }));
+  assert.equal(r.total, 220);
+  const o = f.store.get(`orders/${r.orderId}`);
+  assert.equal(o.items[0].unitPrice, 120);
+  assert.equal(o.items[0].lineTotal, 120);
+  assert.equal(o.items[1].unitPrice, 50);
+  assert.equal(o.items[1].lineTotal, 100);
+  // Stock deducted: 0.5 kg + 0.4 kg = 0.9 kg -> 20 - 0.9 = 19.1 kg
+  assert.equal(f.store.get('adminProducts/p1').stock, 19.1);
+});
+

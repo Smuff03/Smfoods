@@ -70,6 +70,10 @@ export function CatalogProvider({ children }) {
       retailPrice: Number(p.retailPrice) || 0, mrp: Number(p.mrp) || 0,
       stockQty: Number(p.stockQty) || 0,
       images, imageUrl: images[0] || '',
+      startingQuantity: p.startingQuantity || '',
+      availableQuantities: Array.isArray(p.availableQuantities) ? p.availableQuantities : [],
+      variantPricing: Array.isArray(p.variantPricing) ? p.variantPricing : [],
+      packSize: p.packSize || '',
     };
   }), [products]);
 

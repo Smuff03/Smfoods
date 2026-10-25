@@ -210,6 +210,23 @@ select option:disabled { color: #aaa; }
 .specs dt { color: var(--ink-2); } .specs dd { margin: 0; font-weight: 500; }
 .pdesc { margin: 1rem 0; }
 
+/* ---------- PDP Pack Selector & DMart Variant Pills ---------- */
+.pack-selector-wrap { margin: 1.1rem 0; }
+.bfield-label { display: block; font-weight: 700; font-size: .88rem; color: var(--ink); margin-bottom: .5rem; }
+.pack-pills-row { display: flex; flex-wrap: wrap; gap: .6rem; }
+.pack-pill-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: .55rem .95rem; border: 2px solid var(--line); border-radius: 12px;
+  background: #fff; cursor: pointer; transition: all .15s ease-in-out; min-width: 95px; text-align: center;
+}
+.pack-pill-btn:hover:not(:disabled) { border-color: var(--orange); background: var(--tint); }
+.pack-pill-btn.selected { border-color: var(--rust); background: var(--tint); box-shadow: 0 0 0 2px var(--orange); }
+.pack-pill-btn:disabled { opacity: .45; cursor: not-allowed; }
+.pack-pill-weight { font-weight: 700; font-size: .95rem; color: var(--ink); }
+.pack-pill-price { font-weight: 800; font-size: 1.05rem; color: var(--rust); font-family: var(--head); margin-top: .15rem; }
+.pack-pill-save { font-size: .72rem; color: var(--ok); font-weight: 700; background: var(--ok-bg); padding: .1rem .45rem; border-radius: 999px; margin-top: .25rem; white-space: nowrap; }
+.pack-pill-mrp { font-size: .72rem; color: var(--ink-2); margin-top: .25rem; }
+
 /* ---------- auth ---------- */
 .authwrap { display: grid; place-items: start center; padding: 2.5rem 1rem; background: radial-gradient(circle at 10% 10%, var(--tint), transparent 50%); }
 .authcard { width: min(480px, 100%); padding: 2rem; box-shadow: var(--shadow-lg); }

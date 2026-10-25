@@ -18,6 +18,30 @@ export const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export const MAX_LINES = 50;
 export const MAX_QTY = 10000;
+export const parseWeightKg = (variant) => {
+  if (!variant) return 1;
+  const s = String(variant).toLowerCase().trim();
+  if (s.includes('1/2') || s === '500 gm' || s === '500g' || s === '500 g') return 0.5;
+  if (s.includes('200')) return 0.2;
+  if (s.includes('250')) return 0.25;
+  if (s.includes('1 kg') || s === '1kg' || s === '1 k.g.' || s === '1000g' || s === '1000 gm') return 1.0;
+  if (s.includes('2 kg') || s === '2kg') return 2.0;
+  if (s.includes('5 kg') || s === '5kg') return 5.0;
+  const num = parseFloat(s);
+  if (s.includes('gm') || s.includes('g')) return (num || 0) / 1000;
+  if (s.includes('kg')) return num || 0;
+  return num > 0 ? num : 1;
+};
+
+export const isSameWeight = (w1, w2) => {
+  if (!w1 || !w2) return false;
+  if (w1 === w2) return true;
+  const s1 = String(w1).toLowerCase().replace(/\s+/g, '').replace('gm', 'g');
+  const s2 = String(w2).toLowerCase().replace(/\s+/g, '').replace('gm', 'g');
+  if (s1 === s2) return true;
+  return Math.abs(parseWeightKg(w1) - parseWeightKg(w2)) < 1e-4;
+};
+
 /**
  * Pack sizes a customer can choose. A product's retailPrice is the price of 1 kg, so a pack costs
  * retailPrice × factor, and stock (adminProducts.stock) is counted in kg. Mirrors web/src/pricing.js.
@@ -84,10 +108,38 @@ export function priceLine({ type, product, pricing, qty, weight = '1kg' }) {
     const listPrice = product.wholesalePrice;
     return { listPrice, unitPrice: tier ? Math.min(tier.price, listPrice) : listPrice };
   }
+
+  // 1. Check if admin configured variantPricing for this exact weight/pack size
+  const variant = Array.isArray(product.variantPricing)
+    ? product.variantPricing.find((v) => isSameWeight(v.weight, weight))
+    : null;
+
+  if (variant && num(variant.retailPrice) && variant.retailPrice > 0) {
+    const unitPrice = round2(variant.retailPrice);
+    const listPrice = num(variant.mrp) && variant.mrp > unitPrice ? round2(variant.mrp) : unitPrice;
+    return { listPrice, unitPrice };
+  }
+
+  // 2. Proportional retailPrice * factor
   if (!num(product.retailPrice) || product.retailPrice <= 0) throw bad(`${product.name} is not available (no retail price set)`);
-  const factor = WEIGHTS[weight]?.factor ?? 1;
+  const factor = WEIGHTS[weight]?.factor ?? parseWeightKg(weight);
   const price = round2(product.retailPrice * factor);
+  const listPrice = num(product.mrp) && product.mrp > product.retailPrice ? round2(product.mrp * factor) : price;
   return { listPrice: price, unitPrice: price };
+}
+
+export function validWeightsFor(product) {
+  if (Array.isArray(product?.variantPricing) && product.variantPricing.length > 0) {
+    return product.variantPricing.map((v) => v.weight);
+  }
+  if (Array.isArray(product?.availableQuantities) && product.availableQuantities.length > 0) {
+    return product.availableQuantities;
+  }
+  if (typeof product?.packSize === 'string' && product.packSize.trim()) {
+    const parts = product.packSize.split(',').map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 0) return parts;
+  }
+  return ['200g', '500g', '1kg'];
 }
 
 function nextNumber(tx, counters, key, start) {
@@ -117,7 +169,8 @@ export async function placeOrder(ctx, user, input) {
     const qty = Number(it.qty);
     if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QTY) throw bad('Quantities must be whole numbers of at least 1');
     const weight = it.weight == null ? '1kg' : it.weight;
-    if (!Object.prototype.hasOwnProperty.call(WEIGHTS, weight)) throw bad('Please choose a valid pack size (200 g, 500 g or 1 kg)');
+    const factor = WEIGHTS[weight]?.factor ?? parseWeightKg(weight);
+    if (!factor || factor <= 0 || factor > 100) throw bad('Please choose a valid pack size');
     const key = `${id}|${weight}`;
     const cur = wanted.get(key);
     wanted.set(key, { id, weight, qty: (cur?.qty || 0) + qty });
@@ -149,12 +202,18 @@ export async function placeOrder(ctx, user, input) {
   for (const { id, weight, qty } of wanted.values()) {
     const p = products.get(id);
     if (!p || p.active !== true) throw bad('A product in your cart is no longer available');
-    const w = WEIGHTS[weight];
+    const allowed = validWeightsFor(p);
+    if (!allowed.some((w) => isSameWeight(w, weight))) {
+      throw bad('Please choose a valid pack size');
+    }
+    const variant = Array.isArray(p.variantPricing) ? p.variantPricing.find((v) => isSameWeight(v.weight, weight)) : null;
+    const factor = WEIGHTS[weight]?.factor ?? parseWeightKg(weight);
+    const weightLabel = variant?.weight || WEIGHTS[weight]?.label || weight;
     const { listPrice, unitPrice } = priceLine({ type, product: p, weight, qty });
-    const kg = round2(w.factor * qty);
+    const kg = round2(factor * qty);
     kgByProduct.set(id, round2((kgByProduct.get(id) || 0) + kg));
     subtotal += unitPrice * qty;
-    lines.push({ product: p, weight, weightLabel: w.label, qty, kg, listPrice, unitPrice });
+    lines.push({ product: p, weight, weightLabel, qty, kg, listPrice, unitPrice });
   }
   for (const [id, kg] of kgByProduct) {      // stock is checked per product, across all pack sizes
     const p = products.get(id);
@@ -278,12 +337,35 @@ export function storefrontDocs(p, existingPricing, now) {
   const imgs = imageUrls(p);
   const hasImageKeys = 'imageUrl' in p || 'images' in p;
   const optional = (...keys) => { for (const k of keys) { const v = str(p[k]); if (v) return v; } return undefined; };
+
+  // Clean variant pricing for public product doc (NEVER expose wholesalePrice here)
+  const variantPricing = Array.isArray(p.variantPricing) && p.variantPricing.length > 0
+    ? p.variantPricing
+        .map((v) => ({
+          weight: str(v.weight),
+          mrp: num(v.mrp) && v.mrp > 0 ? v.mrp : 0,
+          retailPrice: num(v.retailPrice) && v.retailPrice > 0 ? v.retailPrice : 0,
+        }))
+        .filter((v) => v.weight && (v.retailPrice > 0 || v.mrp > 0))
+    : undefined;
+
+  const availableQuantities = Array.isArray(p.availableQuantities) && p.availableQuantities.length > 0
+    ? p.availableQuantities.map((q) => str(q)).filter(Boolean)
+    : undefined;
+
+  const startingQuantity = str(p.startingQuantity) || undefined;
+  const startVp = Array.isArray(p.variantPricing)
+    ? p.variantPricing.find((v) => isSameWeight(v.weight, p.startingQuantity)) || p.variantPricing[0]
+    : null;
+  const effectiveRetail = priced ? p.retailPrice : (num(startVp?.retailPrice) && startVp.retailPrice > 0 ? startVp.retailPrice : 0);
+  const effectiveMrp = num(p.mrp) && p.mrp > 0 ? p.mrp : (num(startVp?.mrp) && startVp.mrp > 0 ? startVp.mrp : effectiveRetail);
+
   const product = {
     name: str(p.name) || 'Unnamed product',
     category: str(p.category) || 'Uncategorised',
     sku: str(p.sku),
-    mrp: num(p.mrp) && p.mrp > 0 ? p.mrp : priced ? p.retailPrice : 0,
-    retailPrice: priced ? p.retailPrice : 0,
+    mrp: effectiveMrp,
+    retailPrice: effectiveRetail,
     stockQty: Math.max(0, Math.round(Number(p.stock) || 0)),
     active: p.active === true,
     adminProductId: p.id, createdAt: p.createdAt || now, updatedAt: now,
@@ -291,6 +373,9 @@ export function storefrontDocs(p, existingPricing, now) {
     description: 'description' in p ? str(p.description) : optional('desc'),
     packSize: 'packSize' in p ? str(p.packSize) : optional('pack', 'size'),
     ...(hasImageKeys ? { imageUrl: imgs[0] || '', images: imgs } : {}),
+    ...(variantPricing ? { variantPricing } : {}),
+    ...(availableQuantities ? { availableQuantities } : {}),
+    ...(startingQuantity ? { startingQuantity } : {}),
   };
   const pricing = num(p.wholesalePrice)
     ? { wholesalePrice: p.wholesalePrice, moq: Number.isInteger(existingPricing?.moq) && existingPricing.moq >= 1 ? existingPricing.moq : 1, updatedAt: now }

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useCatalog } from './catalog.jsx';
-import { kgInCart, priceFor, weightOf } from './pricing.js';
+import { isSameWeight, kgInCart, priceFor, weightOf } from './pricing.js';
 
 const KEY = 'crunchzy_cart_v2';
 const OLD_KEY = 'smfoods_cart_v1';
@@ -9,7 +9,7 @@ const Ctx = createContext(null);
 export const useCart = () => useContext(Ctx);
 
 // Each cart line is { id, weight, qty }: the same product can be in the cart in several pack sizes.
-const clean = (v) => (Array.isArray(v) ? v.filter((i) => i && typeof i.id === 'string' && i.qty >= 1).map((i) => ({ id: i.id, weight: weightOf(i.weight).key, qty: Math.floor(i.qty) })) : []);
+const clean = (v) => (Array.isArray(v) ? v.filter((i) => i && typeof i.id === 'string' && i.qty >= 1).map((i) => ({ id: i.id, weight: String(i.weight || '200 gm'), qty: Math.floor(i.qty) })) : []);
 const load = () => {
   try {
     const cur = localStorage.getItem(KEY);
@@ -21,7 +21,7 @@ const load = () => {
 const loadDate = () => {
   try { return localStorage.getItem(DATE_KEY) || ''; } catch { return ''; }
 };
-const same = (i, id, weight) => i.id === id && i.weight === weight;
+const same = (i, id, weight) => i.id === id && isSameWeight(i.weight, weight);
 
 export function CartProvider({ children }) {
   const [items, setItems] = useState(load);
