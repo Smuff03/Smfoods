@@ -22,7 +22,7 @@ export default function Orders() {
       <Alert>{err}</Alert>
       {!orders ? <Spinner /> : !orders.length ? <Empty title="No orders yet"><Link to="/shop">Start shopping</Link></Empty> : orders.map((o) => (
         <Link to={`/orders/${o.id}`} key={o.id} className="card orow">
-          <div><b>{o.id}</b><div className="muted">{fmtDate(o.createdAt)} · {o.items?.length || 0} item{o.items?.length === 1 ? '' : 's'}</div><small className="more">Track order &amp; view bill →</small></div>
+          <div><b>{o.id}</b><div className="muted">{fmtDate(o.createdAt)} · {o.items?.length || 0} item{o.items?.length === 1 ? '' : 's'}{o.deliveryDate ? ` · Delivery: ${o.deliveryDate}` : ''}</div><small className="more">Track order &amp; view bill →</small></div>
           <div className="right"><StatusBadge status={STATUS_LABEL[o.orderStatus] || o.orderStatus} /><div><b>{money(o.total)}</b></div></div>
         </Link>
       ))}

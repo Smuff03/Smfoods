@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
-  GoogleAuthProvider, OAuthProvider, createUserWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail,
-  signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile,
+  GoogleAuthProvider, OAuthProvider, createUserWithEmailAndPassword, getRedirectResult, onAuthStateChanged,
+  sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut, updateProfile,
 } from 'firebase/auth';
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase.js';
@@ -17,9 +17,22 @@ export function AuthProvider({ children }) {
   const [s, setS] = useState({ ready: false, user: null });
   const [profile, setProfile] = useState(null);
 
-  useEffect(() => onAuthStateChanged(auth,
-    (u) => setS({ ready: true, user: u }),
-    () => setS({ ready: true, user: null })), []);
+  useEffect(() => {
+    if (!auth) {
+      setS({ ready: true, user: null });
+      return;
+    }
+    // Complete sign-in if returning from a redirect auth flow
+    getRedirectResult(auth)
+      .then(async (res) => {
+        if (res?.user) await ensureProfile(res.user);
+      })
+      .catch(() => {});
+
+    return onAuthStateChanged(auth,
+      (u) => setS({ ready: true, user: u }),
+      () => setS({ ready: true, user: null }));
+  }, []);
 
   useEffect(() => {
     if (!s.user) { setProfile(null); return undefined; }
@@ -36,9 +49,17 @@ export function AuthProvider({ children }) {
   };
 
   const social = async (provider) => {
-    const { user } = await signInWithPopup(auth, provider);
-    await ensureProfile(user);
-    return user;
+    try {
+      const { user } = await signInWithPopup(auth, provider);
+      await ensureProfile(user);
+      return user;
+    } catch (err) {
+      if (err.code === 'auth/popup-blocked') {
+        await signInWithRedirect(auth, provider);
+        return null;
+      }
+      throw err;
+    }
   };
 
   const api = useMemo(() => ({

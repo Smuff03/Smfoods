@@ -38,7 +38,7 @@ export default function OrderDetail() {
       )}
 
       <div className="row between wrapfx noprint"><h1 className="h1s">Order {o.id}</h1><StatusBadge status={STATUS_LABEL[o.orderStatus] || o.orderStatus} /></div>
-      <p className="muted noprint">Placed {fmtDate(o.createdAt)}</p>
+      <p className="muted noprint">Placed {fmtDate(o.createdAt)}{o.deliveryDate ? ` · Requested delivery: ${o.deliveryDate}` : ''}</p>
 
       <section className="card noprint" id="tracking"><h3>Order tracking</h3>
         {cancelled ? <Alert>This order was cancelled.</Alert> : (
@@ -56,7 +56,9 @@ export default function OrderDetail() {
         </div>
         <div className="billto">
           <div><small className="muted">Billed to</small><p><b>{o.customer?.name}</b><br />{o.customer?.phone}{o.customer?.email ? <><br />{o.customer.email}</> : null}</p></div>
-          <div><small className="muted">Deliver to</small><p>{[a.line1, a.line2, a.landmark].filter(Boolean).join(', ')}<br />{a.city}, {a.state} {a.pincode}</p></div>
+          <div><small className="muted">Deliver to</small><p>{[a.line1, a.line2, a.landmark].filter(Boolean).join(', ')}<br />{a.city}, {a.state} {a.pincode}</p>
+            {o.deliveryDate && <p style={{ margin: '.3rem 0 0' }}><small className="muted">Requested delivery: <b>{o.deliveryDate}</b></small></p>}
+          </div>
         </div>
         <div className="scroll-x">
           <table className="tbl"><thead><tr><th>Product</th><th>Pack</th><th>Items</th><th>Price / pack</th><th className="right">Total</th></tr></thead><tbody>
@@ -67,12 +69,15 @@ export default function OrderDetail() {
           <div className="sumrow"><span>Subtotal</span><span>{money(o.subtotal)}</span></div>
           {o.discount > 0 && <div className="sumrow ok"><span>Discount</span><span>−{money(o.discount)}</span></div>}
           <div className="sumrow"><span>Delivery</span><span>{o.deliveryCharge ? money(o.deliveryCharge) : 'Free'}</span></div>
+          {o.deliveryDate && <div className="sumrow"><span>Requested delivery</span><span><b>{o.deliveryDate}</b></span></div>}
           <div className="sumrow tot"><span>Total to pay</span><span>{money(o.total)}</span></div>
         </div>
         <p className="muted">Payment: {o.paymentMethod === 'COD' ? 'Cash on Delivery' : o.paymentMethod} · Status: {o.paymentStatus}</p>
+        {o.deliveryDate && <p className="muted">Requested delivery date: <b>{o.deliveryDate}</b></p>}
         {o.note && <p className="muted">Note: {o.note}</p>}
         <div className="noprint"><button className="btn ghost small" onClick={() => window.print()}>🖨 Print / save bill as PDF</button></div>
       </section>
+
     </div>
   );
 }

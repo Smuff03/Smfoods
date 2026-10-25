@@ -105,7 +105,7 @@ function nextNumber(tx, counters, key, start) {
  */
 export async function placeOrder(ctx, user, input) {
   const { tx, now } = ctx;
-  const { items, address, contact, paymentMethod, requestId, note, consent } = input || {};
+  const { items, address, contact, paymentMethod, requestId, note, consent, deliveryDate } = input || {};
 
   const rid = text(requestId, 'Request id', { min: 8, max: 80 });
   if (!Array.isArray(items) || !items.length) throw bad('Your cart is empty');
@@ -127,6 +127,7 @@ export async function placeOrder(ctx, user, input) {
   if (consent !== true) throw bad('Please agree to share your name, mobile number and address so we can deliver your order');
   if (paymentMethod !== 'COD') throw bad('Only Cash on Delivery is available right now');
   const orderNote = text(note, 'Note', { min: 0, max: 500 });
+  const requestedDeliveryDate = text(deliveryDate, 'Delivery date', { min: 0, max: 50 });
 
   // ---- reads ----
   const dup = await tx.find('orders', { userId: user.uid, requestId: rid });
@@ -194,6 +195,7 @@ export async function placeOrder(ctx, user, input) {
     })),
     subtotal, discount, deliveryCharge, total,
     paymentMethod: 'COD', paymentStatus: 'Pending', orderStatus: 'Pending',
+    deliveryDate: requestedDeliveryDate || null,
     consent: { dataProcessing: true, at: now },
     note: orderNote, stockRestored: false, createdAt: now, updatedAt: now,
   });
@@ -203,7 +205,8 @@ export async function placeOrder(ctx, user, input) {
     id: orderId,
     customer: who.name,
     type, amount: total, status: 'Pending',
-    note: `Web order · COD · ${who.phone} · ${lines.map((l) => `${l.product.name} ${l.weightLabel} x${l.qty}`).join(', ')}${orderNote ? ` · ${orderNote}` : ''}`.slice(0, 500),
+    note: `Web order · COD · ${who.phone}${requestedDeliveryDate ? ` · Delivery: ${requestedDeliveryDate}` : ''} · ${lines.map((l) => `${l.product.name} ${l.weightLabel} x${l.qty}`).join(', ')}${orderNote ? ` · ${orderNote}` : ''}`.slice(0, 500),
+    deliveryDate: requestedDeliveryDate || null,
     createdAt: now, source: 'storefront', userId: user.uid, storefrontOrderId: orderId,
   });
 

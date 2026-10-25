@@ -15,8 +15,12 @@ initializeApp();
 const db = getFirestore();
 db.settings({ ignoreUndefinedProperties: true });
 
-const origins = (process.env.SHOP_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
-const callable = { cors: origins.length ? origins : true };
+const rawOrigins = (process.env.SHOP_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
+// Allow configured production origins as well as local development origins (localhost and 127.0.0.1 on any port)
+const allowedOrigins = rawOrigins.length
+  ? [...rawOrigins, /^http:\/\/localhost(:\d+)?$/, /^http:\/\/127\.0\.0\.1(:\d+)?$/]
+  : true;
+const callable = { cors: allowedOrigins };
 
 /** Firestore-transaction adapter for logic.js. Writes are queued and applied after all reads. */
 function adapter(t) {

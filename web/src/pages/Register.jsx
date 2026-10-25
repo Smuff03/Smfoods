@@ -47,8 +47,18 @@ export default function Register() {
           <Field label="Password *" hint="At least 6 characters"><input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} autoComplete="new-password" /></Field>
           <Field label="Confirm password *"><input type="password" value={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.value })} autoComplete="new-password" /></Field>
         </div>
-        <label className="check"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /> <span>I agree that Crunchzy may store my name, mobile number and email as described in the <Link to="/privacy" target="_blank">Privacy &amp; Cookie Policy</Link>. *</span></label>
-        <button className="btn block" disabled={busy}>{busy ? 'Creating account…' : 'Create account'}</button>
+        <label className="check" htmlFor="register-consent">
+          <input
+            id="register-consent"
+            type="checkbox"
+            required
+            aria-required="true"
+            checked={agree}
+            onChange={(e) => { setAgree(e.target.checked); if (e.target.checked && err.includes('Policy')) setErr(''); }}
+          />
+          <span>I agree that Crunchzy may store my name, mobile number and email as described in the <Link to="/privacy" target="_blank">Privacy &amp; Cookie Policy</Link>. <span className="req-badge">Compulsory</span></span>
+        </label>
+        <button className="btn block" disabled={busy || !agree} title={!agree ? 'Please tick the compulsory consent box to create your account' : ''}>{busy ? 'Creating account…' : 'Create account'}</button>
       </form>
       <p className="center muted">Already registered? <Link to="/login">Log in</Link></p>
     </div></div>

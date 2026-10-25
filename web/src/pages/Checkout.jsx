@@ -12,7 +12,7 @@ const newId = () => (crypto?.randomUUID ? crypto.randomUUID() : `r${Date.now()}$
 
 export default function Checkout() {
   const a = useAuth();
-  const { clear } = useCart();
+  const { clear, deliveryDate, setDeliveryDate } = useCart();
   const { settings } = useCatalog();
   const { lines, subtotal, net, issues, loading } = useCartLines();
   const nav = useNavigate();
@@ -51,7 +51,7 @@ export default function Checkout() {
     if (contact.name.trim().length < 2) return setErr('Enter your name.');
     if (!PHONE_RE.test(contact.phone.trim())) return setErr('Enter a valid 10-digit mobile number.');
     const m = validateAddress(addr); if (m) return setErr(m);
-    if (!agree) return setErr('Please tick the consent box so we can use your details to deliver your order.');
+    if (!agree) return setErr('Please tick the consent box to proceed. It is compulsory to deliver your order.');
     if (issues.length) return setErr(issues[0]);
     lock.current = true; setBusy(true);
     try {
@@ -59,8 +59,9 @@ export default function Checkout() {
       const r = await placeOrder({
         items: lines.map((l) => ({ productId: l.id, weight: l.weight, qty: l.qty })),
         address: clean, contact: { name: contact.name.trim(), phone: contact.phone.trim() },
-        paymentMethod: 'COD', consent: true, requestId: requestId.current, note: note.trim(),
+        paymentMethod: 'COD', consent: agree, deliveryDate: deliveryDate || null, requestId: requestId.current, note: note.trim(),
       });
+
       if (save && pick === 'new') {
         try { await a.saveProfile({ addresses: [...saved, { ...clean, id: newId().slice(0, 8), label: clean.city }].slice(-10) }); } catch { /* non-critical */ }
       }
@@ -92,12 +93,27 @@ export default function Checkout() {
               <span><b>💵 Cash on Delivery</b><small className="muted">Pay in cash when your order arrives</small></span>
             </label>
           ) : <Alert>Cash on Delivery is currently unavailable. Please try again later.</Alert>}
+          <Field label="Preferred delivery date (optional)" hint="Selected in cart; can be adjusted here">
+            <input
+              type="date"
+              value={deliveryDate}
+              onChange={(e) => setDeliveryDate(e.target.value)}
+              min={new Date().toISOString().split('T')[0]}
+            />
+          </Field>
           <Field label="Order note (optional)"><textarea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Any delivery instructions?" /></Field>
         </section>
-        <section className="card consentbox">
-          <label className="check">
-            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
-            <span>I agree that Crunchzy may store and use my <b>name, mobile number and delivery address</b> to process, deliver and contact me about this order. See the <Link to="/privacy" target="_blank">Privacy &amp; Cookie Policy</Link>. *</span>
+        <section className={`card consentbox ${err && !agree ? 'compulsory-alert' : ''}`}>
+          <label className="check" htmlFor="checkout-consent">
+            <input
+              id="checkout-consent"
+              type="checkbox"
+              required
+              aria-required="true"
+              checked={agree}
+              onChange={(e) => { setAgree(e.target.checked); if (e.target.checked && err.includes('consent')) setErr(''); }}
+            />
+            <span>I agree that Crunchzy may store and use my <b>name, mobile number and delivery address</b> to process, deliver and contact me about this order. See the <Link to="/privacy" target="_blank">Privacy &amp; Cookie Policy</Link>. <span className="req-badge">Compulsory</span></span>
           </label>
         </section>
       </div>
@@ -106,12 +122,15 @@ export default function Checkout() {
         {lines.map((l) => <div key={l.key} className="sumrow"><span>{l.p?.name || 'Unavailable item'}<br /><small className="muted">{weightOf(l.weight).label}, +{l.qty} item{l.qty > 1 ? 's' : ''}</small></span><span>{money(l.lineTotal || 0)}</span></div>)}
         <hr />
         <div className="sumrow"><span>Subtotal</span><span>{money(subtotal)}</span></div>
+        {deliveryDate && <div className="sumrow"><span>Delivery date</span><span style={{ fontWeight: 600 }}>{deliveryDate}</span></div>}
         <div className="sumrow"><span>Delivery</span><span>{delivery ? money(delivery) : 'Free'}</span></div>
         <div className="sumrow tot"><span>Total (pay on delivery)</span><span>{money(total)}</span></div>
+
         <small className="muted">Final prices and stock are confirmed by our server when you place the order.</small>
         <Alert>{err}</Alert>
         {issues.map((i) => <Alert key={i}>{i}</Alert>)}
-        <button className="btn block lg" disabled={busy || !codOn || issues.length > 0}>{busy ? 'Placing order…' : `Place order · ${money(total)}`}</button>
+        <button className="btn block lg" disabled={busy || !codOn || issues.length > 0 || !agree} title={!agree ? 'Please tick the compulsory consent box to place your order' : ''}>{busy ? 'Placing order…' : `Place order · ${money(total)}`}</button>
+        {!agree && <p className="consent-reminder"><small>⚠️ Please tick the compulsory consent box above to enable placing your order.</small></p>}
         <Link to="/cart" className="center more">← Back to cart</Link>
       </aside>
     </form>

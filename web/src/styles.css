@@ -154,7 +154,13 @@ select option:disabled { color: #aaa; }
 .span2 { grid-column: span 2; }
 .check { display: flex; gap: .6rem; align-items: flex-start; font-size: .9rem; cursor: pointer; margin: .5rem 0; font-weight: 400; }
 .check input { width: 18px; height: 18px; margin-top: .2rem; accent-color: var(--rust); flex: none; padding: 0; }
-.consentbox { background: var(--tint); border-color: var(--orange-l); }
+.consentbox { background: var(--tint); border: 2px solid var(--orange-l); transition: border-color .2s, box-shadow .2s; }
+.consentbox.compulsory-alert { border-color: var(--rust); box-shadow: 0 0 0 1px var(--rust); }
+.delivery-card { background: var(--tint); border: 2px solid var(--orange-l); }
+.req-badge { display: inline-block; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: #fff; background: var(--rust); padding: .15rem .45rem; border-radius: 999px; margin-left: .35rem; vertical-align: middle; white-space: nowrap; }
+.consent-reminder { font-size: .85rem; color: var(--rust); margin-top: .4rem; text-align: center; }
+
+
 .paycard { display: flex; gap: .8rem; align-items: center; border: 2px solid var(--line); border-radius: 12px; padding: .85rem 1rem; margin-bottom: 1rem; cursor: pointer; }
 .paycard.on { border-color: var(--orange); background: var(--tint); }
 .paycard input { width: 18px; height: 18px; accent-color: var(--rust); padding: 0; }

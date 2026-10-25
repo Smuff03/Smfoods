@@ -8,5 +8,20 @@ export default defineConfig(({ mode }) => {
   const define = Object.fromEntries(
     Object.entries(env).map(([k, v]) => [`import.meta.env.${k}`, JSON.stringify(v)]),
   );
-  return { plugins: [react()], define, server: { port: 5173, host: true } };
+  return {
+    plugins: [react()],
+    define,
+    server: {
+      port: 5173,
+      host: true,
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+      },
+    },
+    preview: {
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+      },
+    },
+  };
 });

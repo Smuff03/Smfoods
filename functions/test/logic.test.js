@@ -89,6 +89,16 @@ test('web orders are always retail, even for an account that still has a wholesa
   assert.deepEqual([o.accountType, o.total, o.shop], ['Retail', 200, null]);
 });
 
+test('delivery date is stored on orders and adminOrders when provided', async () => {
+  const f = fake({ 'adminProducts/p1': product() });
+  await placeOrder(f, customer, order({ deliveryDate: '2026-10-30' }));
+  const o = f.store.get('orders/TMF-1001');
+  assert.equal(o.deliveryDate, '2026-10-30');
+  const a = f.store.get('adminOrders/TMF-1001');
+  assert.equal(a.deliveryDate, '2026-10-30');
+  assert.ok(a.note.includes('Delivery: 2026-10-30'));
+});
+
 test('pack sizes: 200 g / 500 g / 1 kg are priced from the per-kg price and deducted from stock in kg', async () => {
   const f = fake({ 'adminProducts/p1': product({ retailPrice: 100, stock: 10 }) });
   const r = await placeOrder(f, customer, order({ items: [

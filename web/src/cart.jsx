@@ -4,6 +4,7 @@ import { kgInCart, priceFor, weightOf } from './pricing.js';
 
 const KEY = 'crunchzy_cart_v2';
 const OLD_KEY = 'smfoods_cart_v1';
+const DATE_KEY = 'crunchzy_delivery_date_v1';
 const Ctx = createContext(null);
 export const useCart = () => useContext(Ctx);
 
@@ -17,22 +18,35 @@ const load = () => {
     return old ? clean(JSON.parse(old)) : [];
   } catch { return []; }
 };
+const loadDate = () => {
+  try { return localStorage.getItem(DATE_KEY) || ''; } catch { return ''; }
+};
 const same = (i, id, weight) => i.id === id && i.weight === weight;
 
 export function CartProvider({ children }) {
   const [items, setItems] = useState(load);
+  const [deliveryDate, setDeliveryDate] = useState(loadDate);
+
   useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(items)); } catch { /* storage unavailable */ } }, [items]);
+  useEffect(() => {
+    try {
+      if (deliveryDate) localStorage.setItem(DATE_KEY, deliveryDate);
+      else localStorage.removeItem(DATE_KEY);
+    } catch { /* storage unavailable */ }
+  }, [deliveryDate]);
 
   const api = useMemo(() => ({
     items,
     count: items.reduce((n, i) => n + i.qty, 0),
+    deliveryDate,
+    setDeliveryDate,
     add: (id, weight, qty = 1) => setItems((cur) => (cur.some((i) => same(i, id, weight))
       ? cur.map((i) => (same(i, id, weight) ? { ...i, qty: i.qty + qty } : i))
       : [...cur, { id, weight, qty }])),
     setQty: (id, weight, qty) => setItems((cur) => cur.map((i) => (same(i, id, weight) ? { ...i, qty: Math.max(1, Math.floor(qty) || 1) } : i))),
     remove: (id, weight) => setItems((cur) => cur.filter((i) => !same(i, id, weight))),
-    clear: () => setItems([]),
-  }), [items]);
+    clear: () => { setItems([]); setDeliveryDate(''); },
+  }), [items, deliveryDate]);
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }
 
