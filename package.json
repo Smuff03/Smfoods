@@ -8,9 +8,9 @@
     "build": "npm --prefix web run build",
     "preview": "npm --prefix web run preview",
     "test": "npm --prefix functions test",
-    "emulators": "firebase emulators:start --only auth,firestore,functions",
-    "deploy:functions": "firebase deploy --only functions:shop",
-    "deploy:web": "npm run build && firebase deploy --only hosting:shop"
+    "emulators": "npx --yes firebase-tools emulators:start --only auth,firestore,functions",
+    "deploy:functions": "npx --yes cross-env FUNCTIONS_DISCOVERY_TIMEOUT=60000 npx --yes firebase-tools deploy --only functions:shop",
+    "deploy:web": "npm run build && npx --yes firebase-tools deploy --only hosting:shop"
   },
   "engines": {
     "node": ">=20"
