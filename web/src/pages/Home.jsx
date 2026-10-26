@@ -14,7 +14,7 @@ const Row = ({ title, to, items }) => items.length ? (
 
 export default function Home() {
   const { products, categories, loading } = useCatalog();
-  const inStock = products.filter((p) => p.stockQty > 0);
+  const inStock = products;
   const featured = (inStock.filter((p) => p.featured === true).length ? inStock.filter((p) => p.featured === true) : inStock).slice(0, 8);
   const offers = inStock.filter((p) => discountPct(p) > 0).sort((a, b) => discountPct(b) - discountPct(a)).slice(0, 4);
   const fresh = [...inStock].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 4);

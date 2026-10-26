@@ -42,10 +42,7 @@ export default function Product() {
   const images = p.images;
   const pct = discountPct(pr.mrpUnit, pr.unit);
   const inCart = inCartText(items, p.id, p);
-  const room = p.stockQty - kgInCart(items, p.id);           // kg still available to add
-  const maxQty = Math.max(0, Math.floor(room / pr.kg + 1e-9));
-  const bad = p.stockQty <= 0 ? '' : qty > maxQty ? (maxQty > 0 ? `You can add up to ${maxQty} more of ${pr.label}` : `No more ${pr.label} packs available (${p.stockQty} kg in stock)`) : '';
-  const can = p.stockQty > 0 && pr.available && qty >= 1 && !bad;
+  const can = pr.available && qty >= 1;
 
   return (
     <div className="wrap section pdp">
@@ -78,14 +75,12 @@ export default function Product() {
               {weights.map((w) => {
                 const itemPr = priceFor(p, w.key);
                 const isSelected = isSameWeight(wk, w.key);
-                const isAvail = w.factor <= p.stockQty + 1e-9;
                 const savings = itemPr.mrpUnit > itemPr.unit ? itemPr.mrpUnit - itemPr.unit : 0;
                 const savePct = discountPct(itemPr.mrpUnit, itemPr.unit);
                 return (
                   <button
                     key={w.key}
                     type="button"
-                    disabled={!isAvail}
                     className={`pack-pill-btn ${isSelected ? 'selected' : ''}`}
                     onClick={() => { setWk(w.key); setQty(1); }}
                     aria-label={`Select ${w.label} for ${itemPr.priced ? money(itemPr.unit) : 'unpriced'}`}
@@ -119,14 +114,13 @@ export default function Product() {
         <div className="buybox">
           <div className="bfield">
             <label htmlFor="pw">Selected Pack Size</label>
-            <WeightSelect id="pw" value={wk} onChange={(v) => { setWk(v); setQty(1); }} stockKg={p.stockQty} weights={weights} />
+            <WeightSelect id="pw" value={wk} onChange={(v) => { setWk(v); setQty(1); }} weights={weights} />
           </div>
           <div className="bfield">
             <label>Number of packs</label>
-            <Stepper value={qty} onChange={setQty} min={1} max={Math.max(1, maxQty)} label="Number of packs" />
+            <Stepper value={qty} onChange={setQty} min={1} label="Number of packs" />
           </div>
         </div>
-        {bad && <small className="err">{bad}</small>}
         {can && <p className="muted">{qty} × {pr.label} = <b>{money(pr.unit * qty)}</b></p>}
         <div className="row gap qtyrow">
           <button className="btn" disabled={!can} onClick={() => { add(p.id, wk, qty); setDone(true); }}>{done ? 'Added ✓' : 'Add to cart'}</button>

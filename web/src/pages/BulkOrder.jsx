@@ -21,7 +21,6 @@ export default function BulkOrder() {
     const n = Number(qty[p.id]);
     if (!Number.isInteger(n)) return `${p.name}: whole numbers only`;
     if (n < p.wholesale.moq) return `${p.name}: minimum ${p.wholesale.moq}`;
-    if (n > p.stockQty) return `${p.name}: only ${p.stockQty} in stock`;
     return '';
   }).filter(Boolean);
   const total = picked.reduce((s, p) => s + priceFor(p, true, Number(qty[p.id])).unit * Number(qty[p.id]), 0);
@@ -44,8 +43,8 @@ export default function BulkOrder() {
                 <td><b>{p.name}</b><br /><small className="muted">{p.category}{p.sku ? ` · ${p.sku}` : ''}</small></td>
                 <td>{money(p.wholesale.price)}</td><td>{p.wholesale.moq}</td>
                 <td>{p.wholesale.tiers.length ? [...p.wholesale.tiers].sort((a, b) => a.minQty - b.minQty).map((t) => <div key={t.minQty}><small>{t.minQty}+ → {money(t.price)}</small></div>) : <small className="muted">—</small>}</td>
-                <td>{p.stockQty > 0 ? p.stockQty : <span className="badge out">Out</span>}</td>
-                <td><input className="qin" type="number" min={0} max={p.stockQty} disabled={p.stockQty < 1} placeholder="0" value={qty[p.id] ?? ''} onChange={(e) => setQty({ ...qty, [p.id]: e.target.value })} aria-label={`Quantity for ${p.name}`} /></td>
+                <td><span className="badge in">In stock</span></td>
+                <td><input className="qin" type="number" min={0} placeholder="0" value={qty[p.id] ?? ''} onChange={(e) => setQty({ ...qty, [p.id]: e.target.value })} aria-label={`Quantity for ${p.name}`} /></td>
                 <td className="right">{n > 0 ? money(pr.unit * n) : ''}</td>
               </tr>
             );

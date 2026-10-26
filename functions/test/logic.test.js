@@ -60,10 +60,12 @@ test('duplicate submission with same requestId returns the same order, no double
   assert.equal(g.store.get('meta/counters').orders, 1001);
 });
 
-test('rejects overselling, inactive products, bad input, non-COD', async () => {
+test('allows buying when stock is 0 or insufficient (backorders); rejects inactive products, bad input, non-COD', async () => {
   const mk = (p) => fake({ 'adminProducts/p1': product(p) });
-  await assert.rejects(placeOrder(mk({ stock: 1 }), customer, order()), /Only 1 kg of Chivda/);
-  await assert.rejects(placeOrder(mk({ stock: 0 }), customer, order()), /out of stock/);
+  const r1 = await placeOrder(mk({ stock: 1 }), customer, order());
+  assert.ok(r1.orderId);
+  const r0 = await placeOrder(mk({ stock: 0 }), customer, order());
+  assert.ok(r0.orderId);
   await assert.rejects(placeOrder(mk({ active: false }), customer, order()), /no longer available/);
   await assert.rejects(placeOrder(mk(), customer, order({ items: [{ productId: 'p1', qty: 0 }] })), /whole numbers/);
   await assert.rejects(placeOrder(mk(), customer, order({ items: [{ productId: 'p1', qty: 1.5 }] })), /whole numbers/);
@@ -114,9 +116,9 @@ test('pack sizes: 200 g / 500 g / 1 kg are priced from the per-kg price and dedu
   assert.match(f.store.get(`adminOrders/${r.orderId}`).note, /Chivda 200 g x2/);
 });
 
-test('pack sizes: stock is checked in kg across all sizes; unknown sizes are rejected', async () => {
+test('pack sizes: orders succeed across sizes even if stock < kg; unknown sizes are rejected', async () => {
   const mk = (stock) => fake({ 'adminProducts/p1': product({ stock }) });
-  await assert.rejects(placeOrder(mk(1), customer, order({ items: [{ productId: 'p1', weight: '1kg', qty: 1 }, { productId: 'p1', weight: '200g', qty: 1 }] })), /Only 1 kg of Chivda/);
+  await placeOrder(mk(1), customer, order({ items: [{ productId: 'p1', weight: '1kg', qty: 1 }, { productId: 'p1', weight: '200g', qty: 1 }] }));
   await placeOrder(mk(1), customer, order({ items: [{ productId: 'p1', weight: '500g', qty: 2 }] }));          // exactly 1 kg: fine
   await assert.rejects(placeOrder(mk(50), customer, order({ items: [{ productId: 'p1', weight: '250g', qty: 1 }] })), /pack size/);
   await assert.rejects(placeOrder(mk(50), customer, order({ items: [{ productId: 'p1', weight: '2kg', qty: 1 }] })), /pack size/);
@@ -131,9 +133,10 @@ test('consent to share name, mobile and address is required and recorded on the 
   assert.deepEqual(g.store.get('orders/TMF-1001').consent, { dataProcessing: true, at: '2026-10-11T10:00:00.000Z' });
 });
 
-test('same product on two lines is merged for stock check', async () => {
+test('same product on two lines is merged and correctly deducts total kg from stock', async () => {
   const f = fake({ 'adminProducts/p1': product({ stock: 5 }) });
-  await assert.rejects(placeOrder(f, customer, order({ items: [{ productId: 'p1', qty: 3 }, { productId: 'p1', qty: 3 }] })), /Only 5/);
+  await placeOrder(f, customer, order({ items: [{ productId: 'p1', qty: 3 }, { productId: 'p1', qty: 3 }] }));
+  assert.equal(f.store.get('adminProducts/p1').stock, -1);
 });
 
 test('delivery charge and free-delivery threshold come from settings/store', async () => {

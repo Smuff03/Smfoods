@@ -13,18 +13,16 @@ export function Thumb({ p, big }) {
     : <div className={`thumb ph ${big ? 'big' : ''}`} aria-hidden="true"><span>{(p.name || '?').slice(0, 1)}</span></div>;
 }
 
-export function StockBadge({ qty }) {
-  if (qty <= 0) return <span className="badge out">Out of stock</span>;
-  if (qty <= LOW_STOCK) return <span className="badge low">Only {qty} kg left</span>;
+export function StockBadge() {
   return <span className="badge in">In stock</span>;
 }
 
-/** Pack-size dropdown. Sizes larger than the remaining stock are disabled. */
-export function WeightSelect({ value, onChange, stockKg, id, weights = WEIGHTS }) {
+/** Pack-size dropdown. All configured pack sizes are selectable. */
+export function WeightSelect({ value, onChange, id, weights = WEIGHTS }) {
   return (
     <select className="wsel" id={id} value={value} onChange={(e) => onChange(e.target.value)} aria-label="Select quantity">
       {weights.map((w) => (
-        <option key={w.key} value={w.key} disabled={w.factor > stockKg + 1e-9}>
+        <option key={w.key} value={w.key}>
           {w.label}{w.retailPrice ? ` · ${money(w.retailPrice)}` : ''}
         </option>
       ))}
@@ -44,7 +42,7 @@ export default function ProductCard({ p }) {
   const pr = priceFor(p, wk);
   const pct = discountPct(pr.mrpUnit, pr.unit);
   const inCart = inCartText(items, p.id, p);
-  const can = p.stockQty > 0 && pr.available && kgInCart(items, p.id) + pr.kg <= p.stockQty + 1e-9;
+  const can = pr.available;
 
   useEffect(() => { if (!done) return undefined; const t = setTimeout(() => setDone(false), 1400); return () => clearTimeout(t); }, [done]);
 
@@ -64,7 +62,7 @@ export default function ProductCard({ p }) {
         </div>
         {pr.priced && pr.kg > 0 && <small className="muted">{money(pr.perKg)} / kg</small>}
         <div className="row between buyrow">
-          <WeightSelect value={wk} onChange={setWk} stockKg={p.stockQty} weights={weights} />
+          <WeightSelect value={wk} onChange={setWk} weights={weights} />
           <button className="btn small" disabled={!can} onClick={() => { add(p.id, wk, 1); setDone(true); }}>{done ? 'Added ✓' : 'Add'}</button>
         </div>
         {inCart && <small className="incart">In cart: {inCart}</small>}

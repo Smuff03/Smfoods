@@ -17,7 +17,7 @@ export default function Shop() {
 
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
-    let l = products.filter((p) => (!cat || p.category === cat) && (!only || p.stockQty > 0)
+    let l = products.filter((p) => (!cat || p.category === cat)
       && (!t || `${p.name} ${p.category} ${p.sku || ''}`.toLowerCase().includes(t)));
     const unit = (p) => p.retailPrice;
     const sorts = {
@@ -28,7 +28,7 @@ export default function Shop() {
       newest: (a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')),
     };
     return [...l].sort(sorts[sort] || sorts.name);
-  }, [products, q, cat, sort, only]);
+  }, [products, q, cat, sort]);
 
   return (
     <div className="wrap section">
@@ -39,7 +39,6 @@ export default function Shop() {
             <option value="name">Name A–Z</option><option value="price-asc">Price (per kg): low to high</option>
             <option value="price-desc">Price (per kg): high to low</option><option value="discount">Biggest discount</option><option value="newest">Newest</option>
           </select>
-          <label className="check"><input type="checkbox" checked={only} onChange={(e) => set('stock', e.target.checked ? '1' : '')} /> In stock only</label>
         </div>
       </div>
       <div className="pills">

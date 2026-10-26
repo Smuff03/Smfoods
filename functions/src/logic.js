@@ -215,11 +215,7 @@ export async function placeOrder(ctx, user, input) {
     subtotal += unitPrice * qty;
     lines.push({ product: p, weight, weightLabel, qty, kg, listPrice, unitPrice });
   }
-  for (const [id, kg] of kgByProduct) {      // stock is checked per product, across all pack sizes
-    const p = products.get(id);
-    const stock = Number(p.stock) || 0;
-    if (stock < kg) throw bad(stock > 0 ? `Only ${stock} kg of ${p.name} in stock` : `${p.name} is out of stock`);
-  }
+
   subtotal = round2(subtotal);
   const discount = 0;
   const net = round2(subtotal - discount);

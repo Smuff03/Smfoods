@@ -63,9 +63,7 @@ export function useCartLines() {
       if (!p) { if (!loading) issues.push('Some items are no longer available. Remove them to continue.'); return { key, id, weight, qty, missing: true }; }
       const pr = priceFor(p, weight);
       let problem = '';
-      if (p.stockQty <= 0) problem = 'Out of stock';
-      else if (kgInCart(items, id) > p.stockQty + 1e-9) problem = `Only ${p.stockQty} kg in stock — reduce the quantity`;
-      else if (!pr.priced) problem = 'Price not available';
+      if (!pr.priced) problem = 'Price not available';
       if (problem) issues.push(`${p.name}: ${problem}`);
       subtotal += pr.unit * qty;
       return { key, id, weight, qty, p, pr, problem, lineTotal: Math.round(pr.unit * qty * 100) / 100 };
