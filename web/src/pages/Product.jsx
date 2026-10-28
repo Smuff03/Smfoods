@@ -16,18 +16,25 @@ export default function Product() {
 
   const weights = weightsFor(p);
   const def = startingWeight(p);
-  const [wk, setWk] = useState(def);
+
+  // Pre-select the weight already in cart for this product (if any)
+  const cartEntry = items.find((i) => i.id === id);
+  const initialWeight = cartEntry ? cartEntry.weight : def;
+
+  const [wk, setWk] = useState(initialWeight);
   const [qty, setQty] = useState(1);
   const [img, setImg] = useState(0);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
     if (p) {
-      setWk(startingWeight(p));
+      // If the product is in the cart, pre-select that weight; otherwise use default
+      const entry = items.find((i) => i.id === id);
+      setWk(entry ? entry.weight : startingWeight(p));
       setQty(1);
       setImg(0);
     }
-  }, [id, p?.startingQuantity]);
+  }, [id, p?.startingQuantity]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!done) return undefined;

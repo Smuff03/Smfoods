@@ -5,7 +5,7 @@
   "scripts": {
     "setup": "cd functions && npm install && cd ../web && npm install",
     "dev": "npm --prefix web run dev",
-    "build": "npm --prefix web run build",
+    "build": "npm --prefix web install && npm --prefix web run build",
     "preview": "npm --prefix web run preview",
     "test": "npm --prefix functions test",
     "emulators": "npx --yes firebase-tools emulators:start --only auth,firestore,functions",
