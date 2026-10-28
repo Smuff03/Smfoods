@@ -163,6 +163,39 @@ select option:disabled { color: #aaa; }
 .req-badge { display: inline-block; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: #fff; background: var(--rust); padding: .15rem .45rem; border-radius: 999px; margin-left: .35rem; vertical-align: middle; white-space: nowrap; }
 .consent-reminder { font-size: .85rem; color: var(--rust); margin-top: .4rem; text-align: center; }
 
+/* Field validation states */
+.field--invalid > span:first-child { color: var(--err); }
+.field--invalid input,
+.field--invalid select,
+.field--invalid textarea { border-color: var(--err); background: var(--err-bg); }
+.field--invalid input:focus,
+.field--invalid select:focus,
+.field--invalid textarea:focus { border-color: var(--err); box-shadow: 0 0 0 3px rgba(179, 38, 30, .18); }
+.field-err { display: flex; align-items: center; gap: .3rem; color: var(--err); font-weight: 500; }
+
+/* Shake animation for scroll-to invalid field */
+@keyframes field-shake {
+  0%   { transform: translateX(0); }
+  15%  { transform: translateX(-6px); }
+  30%  { transform: translateX(5px); }
+  45%  { transform: translateX(-4px); }
+  60%  { transform: translateX(3px); }
+  75%  { transform: translateX(-2px); }
+  100% { transform: translateX(0); }
+}
+.field--shake { animation: field-shake .45s ease; }
+
+/* Checkout section cards with numbered header */
+.checkout-section { margin-bottom: 1rem; }
+.checkout-section-head { display: flex; align-items: center; gap: .7rem; margin-bottom: 1rem; }
+.checkout-step-num {
+  display: grid; place-items: center;
+  width: 28px; height: 28px; flex: none;
+  border-radius: 50%; background: var(--ink); color: #fff;
+  font: 700 .88rem var(--body);
+}
+.checkout-section-head h3 { margin: 0; font-size: 1.05rem; }
+
 
 .paycard { display: flex; gap: .8rem; align-items: center; border: 2px solid var(--line); border-radius: 12px; padding: .85rem 1rem; margin-bottom: 1rem; cursor: pointer; }
 .paycard.on { border-color: var(--orange); background: var(--tint); }
