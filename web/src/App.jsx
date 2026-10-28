@@ -4,6 +4,7 @@ import CookieBanner from './components/CookieBanner.jsx';
 import Footer from './components/Footer.jsx';
 import { RequireAuth } from './components/Guards.jsx';
 import Header from './components/Header.jsx';
+import CartFab from './components/CartFab.jsx';
 import Cart from './pages/Cart.jsx';
 import Checkout from './pages/Checkout.jsx';
 import Home from './pages/Home.jsx';
@@ -20,7 +21,14 @@ import Shop from './pages/Shop.jsx';
 
 function ScrollTop() { const { pathname } = useLocation(); useEffect(() => { window.scrollTo(0, 0); }, [pathname]); return null; }
 
+function CartFabConditional() {
+  const { pathname } = useLocation();
+  if (pathname === '/cart' || pathname === '/checkout') return null;
+  return <CartFab />;
+}
+
 export default function App() {
+
   return (
     <>
       <ScrollTop />
@@ -50,6 +58,7 @@ export default function App() {
       </main>
       <Footer />
       <CookieBanner />
+      <CartFabConditional />
     </>
   );
 }
